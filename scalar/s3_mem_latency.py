@@ -83,15 +83,18 @@ class ScalarMemAccessLatencyBench(AscendBenchmark):
             elapsed = timer.elapsed_ms()
         else:
             data = np.random.randn(array_size).astype(np.float32)
-            chase_indices = np.random.permutation(array_size)
-            chase_indices = np.tile(chase_indices, (num_accesses // array_size) + 1)[:num_accesses]
+            # Create chase pattern: indices form a linked list within num_accesses range
+            chase_indices = np.random.permutation(num_accesses)
+            # Each index must be < num_accesses to stay in bounds when used as position
+            # Also ensure data access stays within array_size
+            chase_data_idx = chase_indices % array_size
 
             timer.record_start()
             pos = 0
             acc = 0.0
             for i in range(num_accesses):
                 idx = chase_indices[pos]
-                acc += data[idx]
+                acc += data[chase_data_idx[pos]]
                 pos = idx
             timer.record_end()
             elapsed = timer.elapsed_ms()

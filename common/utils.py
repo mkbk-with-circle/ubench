@@ -33,18 +33,26 @@ def get_device_properties(device_id: int = 0) -> dict:
     if HAS_NPU:
         try:
             props["device_name"] = torch.npu.get_device_name(device_id)
-            # Ascend 910B known specs:
-            # AI Cores: varies by card (e.g., 28 for 910B)
-            # FP32: ~0.375 TFLOPS per core (Vector Unit)
-            # FP16/BF16 on Cube: ~32 TFLOPS (910B)
-            # HBM Bandwidth: ~1.2 TB/s (910B)
-            # L1 Buffer: 1 MB per core
+            # Ascend 310P3 specs (实测设备):
+            # AI Cores: 2 per die (4 dies per chip, 2 chips = 8 NPUs)
+            # FP16 on Cube: ~8 TFLOPS per chip
+            # FP32 Vector: ~0.5 TFLOPS per chip
+            # HBM Bandwidth: ~100 GB/s per chip (LPDDR4X)
+            # L1 Buffer: 512 KB per core (310P3)
             # L0A/L0B: 64 KB each per core
             # L0C: 64 KB per core
-            props["theoretical_fp32_tflops"] = 0.375 * 28  # approximate
-            props["theoretical_hbm_bw_gbs"] = 1200
-            props["l1_buffer_kb"] = 1024
-            props["l0_buffer_kb"] = 64
+            device_name = props["device_name"]
+            if "310P" in device_name:
+                props["theoretical_fp32_tflops"] = 0.5  # approximate per chip
+                props["theoretical_fp16_tflops"] = 8.0
+                props["theoretical_hbm_bw_gbs"] = 100
+                props["l1_buffer_kb"] = 512
+                props["l0_buffer_kb"] = 64
+            else:  # 910B fallback
+                props["theoretical_fp32_tflops"] = 0.375 * 28
+                props["theoretical_hbm_bw_gbs"] = 1200
+                props["l1_buffer_kb"] = 1024
+                props["l0_buffer_kb"] = 64
         except Exception as e:
             print(f"[WARN] Could not get device properties: {e}")
 
@@ -57,10 +65,13 @@ def estimate_clock_freq_mhz(device_id: int = 0) -> float:
     Uses a known-duration CPU sleep to calibrate the timing measurement.
     """
     if HAS_NPU:
-        # The Ascend 910B typically runs at ~1.1-1.6 GHz
-        # This is a calibration approach; actual freq may vary
+        # Ascend 310P3 typically runs at ~1.0-1.2 GHz
+        # 910B typically runs at ~1.1-1.6 GHz
+        device_name = torch.npu.get_device_name(0) if torch.npu.is_available() else ""
+        if "310P" in device_name:
+            return 1000.0  # MHz, typical for 310P3
         return 1100.0  # MHz, typical for 910B
-    return 1100.0  # simulated
+    return 1000.0  # simulated
 
 
 def cycles_to_ms(cycles: float, freq_mhz: float = 1100.0) -> float:

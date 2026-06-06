@@ -45,6 +45,10 @@ class VectorRegAccessLatencyBench(AscendBenchmark):
             device_id=device_id,
         )
 
+    def bench_kernel(self, num_regs=1, vec_size=256, chain_length=100) -> float:
+        """Default bench_kernel delegates to bench_kernel_read."""
+        return self.bench_kernel_read(num_regs=num_regs, vec_size=vec_size, chain_length=chain_length)
+
     def bench_kernel_read(self, num_regs=1, vec_size=256, chain_length=100) -> float:
         """
         Measure read latency: use many source registers.
@@ -123,14 +127,11 @@ class VectorRegAccessLatencyBench(AscendBenchmark):
         # Measure read latency
         print("\n--- Vector Register READ Latency ---")
         for nr in reg_counts:
-            res = self.run(
-                num_warmup=num_warmup,
-                num_iterations=num_iters,
-                bench_kwargs={"num_regs": nr},
-                bench_args=(nr, 256, 100),
-            )
+            # Warmup
+            for _ in range(num_warmup):
+                self.bench_kernel_read(num_regs=nr)
 
-            # Override: use bench_kernel_read manually
+            # Manual measurement
             raw_times = []
             for _ in range(num_iters):
                 t = self.bench_kernel_read(num_regs=nr)
