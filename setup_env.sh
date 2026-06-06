@@ -12,9 +12,9 @@ echo "[1/3] 激活 CANN 环境..."
 source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null
 
 echo "[2/3] 检查 Python 依赖..."
-python3 -c "import torch; import torch_npu; import numpy; import yaml" 2>/dev/null || {
+python3 -c "import torch; import torch_npu; import numpy; import yaml; import scipy; import decorator; import attrs" 2>/dev/null || {
     echo "  缺少依赖，正在安装..."
-    pip3 install torch==2.6.0 torch-npu==2.6.0.post5 pyyaml numpy 2>/dev/null
+    pip3 install torch==2.6.0 torch-npu==2.6.0.post5 "numpy<2.0" pyyaml scipy decorator attrs absl-py psutil 2>/dev/null
 }
 
 echo "[3/3] 验证 NPU..."

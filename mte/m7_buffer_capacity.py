@@ -123,8 +123,20 @@ class BufferCapacityBench(AscendBenchmark):
 
     def detect_cliff(self, results):
         """Detect the capacity cliff from bandwidth results."""
+        import re
         bws = [r.value for r in results]
-        sizes_kb = [float(r.notes.split("size=")[1].split("KB")[0]) for r in results]
+        sizes_kb = []
+        for r in results:
+            # Handle both "size=16KB" and "16 KB" formats
+            m = re.search(r'size=(\d+\.?\d*)\s*KB', r.notes)
+            if m:
+                sizes_kb.append(float(m.group(1)))
+            else:
+                m2 = re.search(r'(\d+\.?\d*)\s*KB', r.notes)
+                if m2:
+                    sizes_kb.append(float(m2.group(1)))
+                else:
+                    sizes_kb.append(0)
 
         # Find where bandwidth drops significantly
         peak_bw = max(bws) if bws else 0

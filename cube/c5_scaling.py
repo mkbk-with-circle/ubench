@@ -151,14 +151,23 @@ class MatMulScalingBench(AscendBenchmark):
 
     def export_scaling_data(self, results, filepath="c5_scaling.csv"):
         """Export scaling data for plotting in report."""
+        import re
         with open(filepath, "w") as f:
             f.write("m,n,k,latency_ms,gflops\n")
             for r in results:
-                parts = r.notes.split(",")
-                m = int(parts[0].split("=")[1])
-                n = int(parts[1].split("=")[1])
-                k = int(parts[2].split("=")[1])
-                gflops = float(parts[3].split("=")[1])
+                # Handle both "m=256, n=256, k=256" and "m=n=k=256" formats
+                notes = r.notes
+                # Try m=n=k=N format first
+                sq = re.search(r'm=n=k=(\d+)', notes)
+                if sq:
+                    v = int(sq.group(1))
+                    m, n, k = v, v, v
+                else:
+                    parts = notes.split(",")
+                    m = int(parts[0].split("=")[1])
+                    n = int(parts[1].split("=")[1])
+                    k = int(parts[2].split("=")[1])
+                gflops = float(notes.split("GFLOPS=")[1])
                 f.write(f"{m},{n},{k},{r.value:.6f},{gflops:.2f}\n")
         print(f"[INFO] Scaling data exported to {filepath}")
 

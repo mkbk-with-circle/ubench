@@ -5,10 +5,12 @@ __pycache__/
 .venv/
 venv/
 
-# 测量输出
-results/
-*.csv
+# 测量输出（允许提交结果）
+# results/
+# *.csv
 *.json
+!results/*.json
+!c5_scaling.csv
 !report_template.md
 
 # 本地参考/敏感（勿提交）
