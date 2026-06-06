@@ -33,30 +33,30 @@
 
 ## Road Map
 
-### Phase 1: 环境搭建（~30min）
-- [ ] Step 1.1: 安装 torch + torch_npu（匹配 Ascend 310P3 / CANN 版本）
-- [ ] Step 1.2: 运行 `test_imports.py` 验证所有模块可导入
-- [ ] Step 1.3: 写环境恢复脚本 `setup_env.sh`（一键 source + pip install）
+### Phase 1: 环境搭建（~30min） ✅
+- [x] Step 1.1: 安装 torch 2.6.0 + torch_npu 2.6.0.post5（CANN 8.2.RC1）
+- [x] Step 1.2: `test_imports.py` 21/21 全部通过
+- [x] Step 1.3: 写好 `setup_env.sh` 环境恢复脚本
 
-### Phase 2: 运行基准测试（~1-2h）
-- [ ] Step 2.1: 跑 Scalar (S1-S3) — 快速验证 NPU 可用，~5min
-- [ ] Step 2.2: 跑 Vector (V1-V5) — ~10min
-- [ ] Step 2.3: 跑 Cube (C1-C5) — ~20min（含 C5 大矩阵）
-- [ ] Step 2.4: 跑 MTE (M1-M8) — ~15min
-- [ ] Step 2.5: 遇报错则逐步修复代码适配 310P3
-- [ ] Step 2.6: 全部跑通后运行 `run_all.py` 生成汇总 `results/all_results.json`
+### Phase 2: 运行基准测试（~1-2h） ✅
+- [x] Step 2.1: Scalar (S1-S3) — 18 results
+- [x] Step 2.2: Vector (V1-V5) — 100 results
+- [x] Step 2.3: Cube (C1-C5) — 58 results（修复 c5_scaling.py 解析 bug）
+- [x] Step 2.4: MTE (M1-M8) — 40 results（修复 m7_buffer_capacity.py 解析 bug）
+- [x] Step 2.5: 修复 2 个代码 bug 适配 310P3
+- [x] Step 2.6: `run_all.py` 生成汇总 216 个测量结果
 
-### Phase 3: 结果整理（~30min）
-- [ ] Step 3.1: 从 4 个 JSON 中提取 21 个参数，填入 Figure 1 表格
-- [ ] Step 3.2: 用 C5 数据生成折线图（matplotlib，延迟 vs 矩阵规模）
-- [ ] Step 3.3: 整理所有原始数据，准备附录
+### Phase 3: 结果整理（~30min） ✅
+- [x] Step 3.1: 提取 22 个关键参数到 `results/extracted_params.json`
+- [x] Step 3.2: 生成 C5 折线图 `results/c5_scaling_chart.png`
+- [x] Step 3.3: 整理所有原始数据（5 个 JSON + 1 个 CSV + 1 个 PNG）
 
-### Phase 4: 撰写报告（~1-2h）
-- [ ] Step 4.1: 填写 `report_template.md` 所有空白字段
-- [ ] Step 4.2: 分析各参数合理性，与理论值对比（Section 4.1）
-- [ ] Step 4.3: 讨论误差来源、DaVinci 架构特征（Section 4.2）
-- [ ] Step 4.4: 撰写总结（Section 5）
-- [ ] Step 4.5: 导出最终 PDF
+### Phase 4: 撰写报告（~1-2h） ✅
+- [x] Step 4.1: 填写 `report_template.md` 所有字段
+- [x] Step 4.2: 分析各参数合理性，与理论值对比（Section 4.1）
+- [x] Step 4.3: 讨论误差来源、DaVinci 架构特征（Section 4.2）
+- [x] Step 4.4: 撰写总结（Section 5）
+- [ ] Step 4.5: 导出 PDF（可选，report_template.md 已是完整报告）
 
 ---
 
