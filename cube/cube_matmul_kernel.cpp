@@ -35,15 +35,51 @@ class CubeMatmulKernel {
   }
 
   __aicore__ inline void Process(uint32_t repeats) {
-    for (uint32_t i = 0; i < repeats; ++i) {
-      if constexpr (DoMatmul) {
-        mm_.SetOrgShape(kM, kN, kK);
+    if constexpr (DoMatmul) {
+      // Initialize Matmul with tiling for 16x16x16
+      TCubeTiling tiling;
+      tiling.usedCoreNum = 1;
+      tiling.M = kM;
+      tiling.N = kN;
+      tiling.Ka = kK;
+      tiling.Kb = kK;
+      tiling.singleCoreM = kM;
+      tiling.singleCoreN = kN;
+      tiling.singleCoreK = kK;
+      tiling.baseM = kM;
+      tiling.baseN = kN;
+      tiling.baseK = kK;
+      tiling.depthA1 = 1;
+      tiling.depthB1 = 1;
+      tiling.stepM = 1;
+      tiling.stepN = 1;
+      tiling.isBias = 0;
+      tiling.transLength = 0;
+      tiling.iterateOrder = 0;
+      tiling.shareMode = 0;
+      tiling.shareL1Size = 0;
+      tiling.shareL0CSize = 0;
+      tiling.shareUbSize = 0;
+      tiling.batchM = 1;
+      tiling.batchN = 1;
+      tiling.singleBatchM = kM;
+      tiling.singleBatchN = kN;
+      tiling.stepKa = 1;
+      tiling.stepKb = 1;
+      tiling.depthAL1CacheUB = 0;
+      tiling.depthBL1CacheUB = 0;
+      mm_.Init(&tiling);
+      mm_.SetOrgShape(kM, kN, kK);
+      for (uint32_t i = 0; i < repeats; ++i) {
         mm_.SetTensorA(a_);
         mm_.SetTensorB(b_);
         mm_.IterateAll(c_);
-      } else if ((i & 0x7ffu) == 0) {
-        // Keep the loop observable without issuing Cube work.
-        { union { uint32_t u; float f; } c; c.u = i; c_.SetValue(0, c.f); }
+      }
+    } else {
+      for (uint32_t i = 0; i < repeats; ++i) {
+        if ((i & 0x7ffu) == 0) {
+          { union { uint32_t u; float f; } c; c.u = i; c_.SetValue(0, c.f); }
+        }
       }
     }
   }
