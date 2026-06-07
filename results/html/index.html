@@ -39,12 +39,30 @@ body{font-family:'Segoe UI',-apple-system,sans-serif;background:var(--bg);color:
 .bd-ok{background:rgba(0,230,118,.15);color:var(--green)}.bd-warn{background:rgba(255,215,64,.15);color:var(--yellow)}.bd-skip{background:rgba(179,136,255,.15);color:var(--purple)}
 .sb{padding:22px}
 
-/* chart grid */
-.cg{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:900px){.cg{grid-template-columns:1fr}}
-.cb{background:rgba(0,0,0,.2);border-radius:8px;padding:14px}
-.cb h3{font-size:.85rem;color:var(--dim);margin-bottom:10px;font-weight:500}
-.cb canvas{width:100%!important}
+/* chart grid — 固定高度，防止 Chart.js 把页面撑到数千像素 */
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cg-4{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.cg,.cg-4{grid-template-columns:1fr}}
+.cb{background:rgba(0,0,0,.2);border-radius:8px;padding:12px 14px}
+.cb h3{font-size:.82rem;color:var(--dim);margin-bottom:8px;font-weight:500}
+.chart-wrap{position:relative;height:168px;width:100%}
+.chart-wrap.sm{height:120px}
+.chart-wrap canvas{display:block;max-height:100%!important}
+
+/* 拟合验证：紧凑卡片网格 */
+.bench-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.bench-card{background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.bench-card h4{font-size:.78rem;color:var(--text);margin-bottom:2px;font-weight:600}
+.bench-card .meta{font-size:.72rem;color:var(--dim);margin-bottom:6px;line-height:1.4}
+.bench-card.warn{border-color:rgba(255,215,64,.2)}
+
+/* 可折叠区块 */
+details.coll{margin-bottom:14px}
+details.coll summary{cursor:pointer;list-style:none;padding:14px 18px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-weight:600;font-size:.92rem}
+details.coll summary::-webkit-details-marker{display:none}
+details.coll summary::before{content:'▸ ';color:var(--cyan)}
+details.coll[open] summary::before{content:'▾ '}
+details.coll .coll-body{padding:14px 0 4px}
 
 /* tables */
 .dt{width:100%;border-collapse:collapse;margin-top:14px;font-size:.88rem}
@@ -615,10 +633,6 @@ const BENCH = DATA.benchmarks;
 
 const byName = Object.fromEntries(BENCH.map(b => [b.name, b]));
 const ok     = BENCH.filter(b => b.status === 'ok');
-const mte    = BENCH.filter(b => b.name.startsWith('mte_'));
-const vec    = BENCH.filter(b => b.name.startsWith('vector_'));
-const scl    = BENCH.filter(b => b.name.startsWith('scalar_'));
-const cube   = BENCH.filter(b => b.name.startsWith('cube_'));
 
 /* ── deriveMetric: 从 EMBEDDED_DATA.derived 读取，不再重新算 ────────── */
 function dv(b, key, fallback) {
@@ -695,10 +709,10 @@ function renderMetrics() {
   return h;
 }
 
-/* ── 渲染测试配置 ──────────────────────────────────────────────────────── */
+/* ── 可折叠：测试配置 ──────────────────────────────────────────────────── */
 function renderConfig() {
   const rp = META.run_params;
-  return `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(255,255,255,.08)">⚙️</div><h2>测试配置 & 推导公式</h2></div><div class="sb"><div class="cg">
+  return `<details class="coll"><summary>⚙️ 测试配置 & 推导公式</summary><div class="coll-body"><div class="cg">
     <div class="cb" style="background:transparent"><h3>运行参数</h3><table class="dt" style="margin-top:0">
       <tr><td>device</td><td class="mo">${rp.device}</td></tr>
       <tr><td>warmup / iters</td><td class="mo">${rp.warmup} / ${rp.iters}</td></tr>
@@ -706,199 +720,167 @@ function renderConfig() {
       <tr><td>repeats sweep</td><td class="mo">${rp.repeats_sweep.join(', ')}</td></tr>
       <tr><td>size_bytes</td><td class="mo">${rp.size_bytes} (${rp.size_bytes/1024} KB)</td></tr>
     </table></div>
-    <div class="cb" style="background:transparent"><h3>推导公式（与 kernel 常量一致）</h3><table class="dt" style="margin-top:0">
-      <tr><td>MTE 带宽</td><td class="mo">blocks×kTileBytes×2 / slope = ${KC.mte_copy_bw.blocks}×1024×2 / slope_us</td></tr>
-      <tr><td>Vector GFLOPS</td><td class="mo">blocks×lanes×elems / slope = ${KC.vector_throughput.blocks}×${KC.vector_throughput.lanes}×${KC.vector_throughput.elems} / slope_us</td></tr>
-      <tr><td>Vector ops/cycle</td><td class="mo">blocks×lanes / (slope_us×1000) @1GHz</td></tr>
+    <div class="cb" style="background:transparent"><h3>推导公式</h3><table class="dt" style="margin-top:0">
+      <tr><td>MTE 带宽</td><td class="mo">${KC.mte_copy_bw.blocks}×1024×2 / slope_us → GB/s</td></tr>
+      <tr><td>Vector GFLOPS</td><td class="mo">${KC.vector_throughput.blocks}×${KC.vector_throughput.lanes}×${KC.vector_throughput.elems} / slope_us</td></tr>
+      <tr><td>拟合图 Y 轴</td><td class="mo">adjusted_us / repeat（μs/op），应接近水平线 = slope</td></tr>
     </table></div>
-  </div></div></div>`;
+  </div></div></details>`;
 }
 
-/* ── 渲染单个 benchmark section ────────────────────────────────────────── */
-function renderSection(title, icon, iconCls, items, badgeText, badgeCls) {
-  let h = `<div class="sec"><div class="sh"><div class="ic ${iconCls}">${icon}</div><h2>${esc(title)}</h2><span class="bd ${badgeCls}">${esc(badgeText)}</span></div><div class="sb">`;
-
-  // 图表
-  h += '<div class="cg">';
-  for (const b of items) {
-    if (b.status !== 'ok') continue;
-    const cid = `chart_${b.name}`;
-    h += `<div class="cb"><h3>time(N) — ${esc(b.label)} (${esc(dv(b,'primary_unit','μs/op'))})</h3><canvas id="${cid}" height="240"></canvas></div>`;
-  }
-  h += '</div>';
-
-  // 分析
-  h += renderAnalysis(items);
-
-  // 数据表
-  h += renderTable(items);
-
-  h += '</div></div>';
-  return h;
-}
-
-function renderAnalysis(items) {
-  let h = '';
-  for (const b of items) {
-    if (b.status !== 'ok') continue;
+/* ── 汇总表（一行一 benchmark）──────────────────────────────────────── */
+function renderMasterTable() {
+  let h = `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.12)">📋</div><h2>测定结果汇总</h2><span class="bd bd-ok">${ok.length} 项通过</span></div><div class="sb">`;
+  h += '<table class="dt"><thead><tr><th>类别</th><th>基准</th><th>派生指标</th><th>斜率 (μs/op)</th><th>R²</th><th>Lab 映射</th></tr></thead><tbody>';
+  for (const b of ok) {
+    const cat = b.name.startsWith('mte_') ? 'MTE' : b.name.startsWith('vector_') ? 'Vector' : 'Scalar';
     const kc = KC[b.name] || {};
-    h += `<div class="ab${b.unreliable ? ' warn-box' : ''}">
-      <h3>📊 ${esc(b.label)}${b.unreliable ? ' ⚠️ 低可信度' : ''}</h3>
-      <p>`;
-
-    if (b.unreliable) {
-      h += `<strong>⚠ 警告</strong>: ${esc(b.unreliable_reason)}<br>本指标不作为正式 KPI，仅供参考。<br>`;
-    }
-
-    if (b.name === 'mte_copy_bw') {
-      const d = b.derived;
-      h += `<strong>带宽</strong>: 每 repeat 搬运 ${KC.mte_copy_bw.blocks}×${KC.mte_copy_bw.bytes_per_repeat_per_block}B = ${KC.mte_copy_bw.blocks*KC.mte_copy_bw.bytes_per_repeat_per_block}B → <code>${d.primary_value} ${d.primary_unit}</code><br>`;
-      h += `公式: ${KC.mte_copy_bw.blocks} blocks × 1024B × 2 (GM→UB→GM) / ${b.slope_us}μs`;
-    } else if (b.name === 'mte_startup_latency') {
-      h += `32B 完整 DataCopy 往返延迟 <code>${b.derived.primary_value} ns</code>。`;
-      h += `非纯 M8 DMA 启动开销，含 GM→UB→GM 全路径。`;
-    } else if (b.name === 'mte_granularity') {
-      h += `mode=0 最小粒度 (32B) 延迟 <code>${b.derived.primary_value} ns</code>。`;
-      h += `非 Lab2 M7 容量曲线。`;
-    } else if (b.name === 'vector_throughput') {
-      const d = b.derived;
-      h += `每 repeat: ${KC.vector_throughput.blocks} blocks × ${KC.vector_throughput.lanes} lanes × ${KC.vector_throughput.elems} elems = <strong>${d.total_ops_per_repeat} FP32 ops</strong><br>`;
-      h += `GFLOPS = ${d.total_ops_per_repeat} / ${b.slope_us}μs ≈ <strong>${d.primary_value} GFLOPS</strong><br>`;
-      h += `ops/cycle = ${KC.vector_throughput.blocks*KC.vector_throughput.lanes} / (${b.slope_us}μs × 1GHz) ≈ <strong>${d.ops_per_cycle} ops/cycle</strong><br>`;
-      h += `注: 含 DataCopy + PipeBarrier 开销，为端到端 repeat 吞吐，非裸向量峰值。`;
-    } else if (b.name === 'vector_add_latency' || b.name === 'vector_mul_latency') {
-      h += `RAW 依赖链延迟 <code>${b.derived.primary_value} ns</code>，含 PipeBarrier 同步。`;
-    } else if (b.name === 'vector_pipeline_depth') {
-      h += `依赖 Add + 独立 gap ops，斜率 <code>${b.derived.primary_value} ns</code>。与纯依赖 Add 接近，gap ops 被管线隐藏。`;
-    } else if (b.name === 'scalar_arith_latency') {
-      h += `LCG 每步 <code>${b.derived.primary_value} ns</code>。R²=${b.r2}，baseline 与 target 成本接近。`;
-    } else if (b.name === 'scalar_branch_overhead') {
-      h += `条件分支开销 <code>${b.derived.primary_value} ns</code>，R²=${b.r2} 可信。非 S3 访存延迟。`;
-    }
-
-    if (kc.lab_mapping) {
-      h += `<br><em style="color:var(--dim)">Lab 映射: ${esc(kc.lab_mapping)}</em>`;
-    }
-    h += '</p></div>';
+    const derived = `${b.derived.primary_value} ${b.derived.primary_unit}`;
+    h += `<tr${b.unreliable ? ' style="opacity:.85"' : ''}>
+      <td>${cat}</td>
+      <td>${esc(b.label)}${b.unreliable ? ' ⚠' : ''}</td>
+      <td class="mo">${derived}</td>
+      <td class="mo">${b.slope_us}</td>
+      <td class="${r2cls(b.r2)}">${b.r2.toFixed(5)}</td>
+      <td style="font-size:.8rem;color:var(--dim)">${esc(kc.lab_mapping || '—')}</td>
+    </tr>`;
   }
+  h += '</tbody></table></div></div>';
   return h;
 }
 
-function renderTable(items) {
-  const okItems = items.filter(b => b.status === 'ok');
-  if (!okItems.length) return '';
-  let h = '<table class="dt"><thead><tr><th>基准</th><th>repeat</th><th>total (μs)</th><th>baseline (μs)</th><th>adjusted (μs)</th><th>斜率</th><th>R²</th><th>派生</th></tr></thead><tbody>';
-  for (const b of okItems) {
+/* ── 拟合验证：μs/op 应平坦（比绝对 time 更易读）──────────────────────── */
+function benchSummaryLine(b) {
+  const d = b.derived;
+  if (b.name === 'mte_copy_bw') return `斜率 ${b.slope_us} μs/op → ${d.primary_value} ${d.primary_unit}`;
+  if (b.name === 'vector_throughput') return `${d.primary_value} ${d.primary_unit} · ${d.ops_per_cycle} vec-inst/cycle`;
+  if (d.latency_ns !== undefined) return `≈ ${d.primary_value} ${d.primary_unit}/op`;
+  return `斜率 ${b.slope_us} μs/op`;
+}
+
+function renderFitGrid() {
+  let h = `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,230,118,.12)">📐</div>
+    <h2>线性拟合验证</h2><span class="bd bd-ok">Y = adjusted/repeat (μs/op)</span></div><div class="sb">
+    <p style="font-size:.82rem;color:var(--dim);margin-bottom:12px">
+      纵轴为每次 repeat 的<strong>单位成本</strong>（baseline 校正后），拟合良好时应接近水平虚线（= 调整后斜率）。
+      不再绘制绝对 time(μs)，避免 0~1400 μs 量级把图表撑得过长。
+    </p><div class="bench-grid">`;
+  for (const b of ok) {
+    const kc = KC[b.name] || {};
+    h += `<div class="bench-card${b.unreliable ? ' warn' : ''}">
+      <h4>${esc(b.label)}</h4>
+      <div class="meta">${esc(benchSummaryLine(b))} · R²=${b.r2.toFixed(4)}</div>
+      <div class="chart-wrap sm"><canvas id="chart_${b.name}"></canvas></div>
+    </div>`;
+  }
+  h += '</div></div></div>';
+  return h;
+}
+
+/* ── 原始 sweep 数据（可折叠）────────────────────────────────────────── */
+function renderRawTable() {
+  let h = '<table class="dt"><thead><tr><th>基准</th><th>repeat</th><th>total</th><th>baseline</th><th>adjusted</th><th>μs/op</th></tr></thead><tbody>';
+  for (const b of ok) {
     for (let i = 0; i < b.sweep.length; i++) {
       const s = b.sweep[i];
+      const perOp = s.adjusted_us / s.repeat;
       h += '<tr>';
       if (i === 0) h += `<td rowspan="${b.sweep.length}">${esc(b.name)}</td>`;
-      h += `<td class="mo">${s.repeat}</td><td class="mo">${s.total_us.toFixed(2)}</td><td class="mo">${s.baseline_us.toFixed(2)}</td><td class="mo">${s.adjusted_us.toFixed(2)}</td>`;
-      if (i === 0) {
-        h += `<td rowspan="${b.sweep.length}" class="mo">${b.slope_us}</td>`;
-        h += `<td rowspan="${b.sweep.length}" class="${r2cls(b.r2)}">${b.r2}</td>`;
-        h += `<td rowspan="${b.sweep.length}" class="mo">${b.derived.primary_value} ${b.derived.primary_unit}</td>`;
-      }
-      h += '</tr>';
+      h += `<td class="mo">${s.repeat}</td><td class="mo">${s.total_us.toFixed(1)}</td><td class="mo">${s.baseline_us.toFixed(1)}</td>
+        <td class="mo">${s.adjusted_us.toFixed(2)}</td><td class="mo">${perOp.toFixed(4)}</td></tr>`;
     }
   }
   h += '</tbody></table>';
-  return h;
+  return `<details class="coll"><summary>📊 原始 sweep 数据 (μs)</summary><div class="coll-body">${h}</div></details>`;
 }
 
-/* ── 渲染 Cube section ─────────────────────────────────────────────────── */
 function renderCube() {
-  return `<div class="sec"><div class="sh"><div class="ic cub">🧮</div><h2>Cube — 矩阵乘法单元 (Matrix Multiply Unit)</h2><span class="bd bd-skip">310P 不支持 · 已跳过</span></div><div class="sb">
-    <div class="ab skip-box">
-      <h3>310P 环境不支持，已跳过</h3>
-      <p>
-        三个 Cube 基准 (<code>cube_tile_latency</code>, <code>cube_throughput</code>, <code>cube_scaling</code>) 在 310P3 (m200) 上因
-        <code>lib/matmul_intf.h</code> 的 <code>Matmul</code> 模板兼容性问题会挂起（进程卡在 <code>logic_cq_wait_event</code>）。<br><br>
-        <strong>具体原因</strong>: <code>IterateAll()</code> 内部 v200 代码路径对地址 0 执行 <code>DataCacheCleanAndInvalid</code> 导致硬件挂起；
-        即使传入正确 <code>TCubeTiling</code>，调度器仍无法初始化。<br><br>
-        <strong>处理</strong>: 在 310P 上自动跳过，不阻塞其他基准。待 910B 环境验证。<br>
-        <strong>注意</strong>: 未修改任何 Cube 内核源码。
-      </p>
-    </div>
-  </div></div>`;
+  return `<details class="coll"><summary>🧮 Cube — 310P 不支持 · 已跳过</summary><div class="coll-body">
+    <div class="ab skip-box"><p>
+      三个 Cube 基准在 310P3 上 <code>Matmul</code> 模板挂起，已跳过。待 910B 验证。未修改 Cube 内核源码。
+    </p></div></details>`;
 }
 
-/* ── 渲染综合对比 ──────────────────────────────────────────────────────── */
+/* ── 综合对比（横向条形图，按量级分组）────────────────────────────────── */
 function renderOverview() {
-  return `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.15)">📈</div><h2>综合对比 — 所有微架构参数</h2></div><div class="sb">
-    <div class="cg">
-      <div class="cb"><h3>带宽 (GB/s)</h3><canvas id="overview_bw" height="220"></canvas></div>
-      <div class="cb"><h3>吞吐 (GFLOPS)</h3><canvas id="overview_gflops" height="220"></canvas></div>
-      <div class="cb"><h3>延迟 (ns)</h3><canvas id="overview_lat" height="220"></canvas></div>
-      <div class="cb"><h3>拟合质量 R²</h3><canvas id="overview_r2" height="220"></canvas></div>
+  return `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.15)">📈</div><h2>派生指标对比</h2></div><div class="sb">
+    <div class="cg cg-4">
+      <div class="cb"><h3>带宽 GB/s</h3><div class="chart-wrap"><canvas id="overview_bw"></canvas></div></div>
+      <div class="cb"><h3>吞吐 GFLOPS</h3><div class="chart-wrap"><canvas id="overview_gflops"></canvas></div></div>
+      <div class="cb"><h3>延迟 ns/op（对数）</h3><div class="chart-wrap"><canvas id="overview_lat"></canvas></div></div>
+      <div class="cb"><h3>拟合 R²</h3><div class="chart-wrap"><canvas id="overview_r2"></canvas></div></div>
     </div>
-    <div class="ab" style="margin-top:18px">
-      <h3>⚠ 310P 免责声明</h3>
-      <p>${esc(META.disclaimer)}</p>
-    </div>
+    <div class="ab" style="margin-top:14px"><h3>⚠ 310P 免责声明</h3><p>${esc(META.disclaimer)}</p></div>
   </div></div>`;
 }
 
-/* ── Chart.js 绘图 ─────────────────────────────────────────────────────── */
-const CO = (yl) => ({
-  responsive:true, maintainAspectRatio:false,
-  plugins:{legend:{labels:{color:'#8899aa',font:{size:10}}}},
-  scales:{
-    x:{title:{display:true,text:'repeat',color:'#5a6a7a'},ticks:{color:'#5a6a7a'},grid:{color:'rgba(255,255,255,.04)'}},
-    y:{title:{display:true,text:yl,color:'#5a6a7a'},ticks:{color:'#5a6a7a'},grid:{color:'rgba(255,255,255,.04)'}}
-  }
-});
+/* ── Chart.js 绘图（固定容器高度 + 合理 Y 轴）────────────────────────── */
+const AX = {
+  x: { ticks: { color: '#5a6a7a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+  y: { ticks: { color: '#5a6a7a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } }
+};
 
-function drawFit(cid, b, color) {
+const COLORS = {
+  mte_copy_bw: '#ff5252', mte_startup_latency: '#ff9100', mte_granularity: '#ff6d00',
+  vector_add_latency: '#00e676', vector_mul_latency: '#00d4ff', vector_throughput: '#00bfa5',
+  vector_pipeline_depth: '#64ffda', scalar_arith_latency: '#ffd740', scalar_branch_overhead: '#ff9100'
+};
+
+/** 拟合验证：μs/op = adjusted/repeat，水平线 = slope */
+function drawPerOpFit(cid, b, color) {
   const el = document.getElementById(cid);
   if (!el || typeof Chart === 'undefined') return;
   const sw = b.sweep;
   const reps = sw.map(s => s.repeat);
-  const adj = sw.map(s => s.adjusted_us);
-  const fitY = reps.map(x => b.slope_us * x + b.intercept_us);
-  const ic = b.intercept_us >= 0 ? '+' : '';
+  const perOp = sw.map(s => s.adjusted_us / s.repeat);
+  const slope = b.slope_us;
+  const flat = reps.map(() => slope);
+  const vals = perOp.filter(v => isFinite(v));
+  const pad = (Math.max(...vals, slope) - Math.min(...vals, slope)) * 0.15 || slope * 0.1 || 0.01;
+  const yMin = Math.min(...vals, slope) - pad;
+  const yMax = Math.max(...vals, slope) + pad;
+
   new Chart(el.getContext('2d'), {
     type: 'line',
     data: {
       labels: reps,
       datasets: [
-        { label: 'adjusted (μs)', data: adj, borderColor: color, backgroundColor: color + '33',
-          pointRadius: 5, borderWidth: 2.5, tension: 0 },
-        { label: `fit adj: ${b.slope_us}·N${ic}${b.intercept_us.toFixed(1)}`, data: fitY,
-          borderColor: color + 'cc', borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, tension: 0 },
-        { label: 'total (μs)', data: sw.map(s => s.total_us), borderColor: color + '66',
-          borderDash: [2, 4], pointRadius: 3, borderWidth: 1, tension: 0 },
-        { label: 'baseline (μs)', data: sw.map(s => s.baseline_us), borderColor: '#5a6a7a',
-          borderDash: [5, 5], pointRadius: 2, borderWidth: 1, tension: 0 }
+        { label: 'μs/op', data: perOp, borderColor: color, backgroundColor: color + '44',
+          pointRadius: 4, borderWidth: 2, tension: 0 },
+        { label: `slope ${slope}`, data: flat, borderColor: '#8899aa',
+          borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, tension: 0 }
       ]
     },
-    options: CO('time (μs)')
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ...AX.x, title: { display: true, text: 'repeat', color: '#5a6a7a', font: { size: 10 } } },
+        y: { ...AX.y, min: yMin, max: yMax, title: { display: true, text: 'μs/op', color: '#5a6a7a', font: { size: 10 } } }
+      }
+    }
   });
 }
 
-function drawBar(cid, labels, vals, colors, yLabel, unit) {
+/** 横向条形图（标签长时更易读） */
+function drawHBar(cid, labels, vals, colors, unit, logScale) {
   const el = document.getElementById(cid);
   if (!el || typeof Chart === 'undefined' || !labels.length) return;
-  const base = CO(yLabel);
   new Chart(el.getContext('2d'), {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: yLabel, data: vals,
-        backgroundColor: colors.map(c => c + '88'),
-        borderColor: colors, borderWidth: 2
-      }]
+      datasets: [{ data: vals, backgroundColor: colors.map(c => c + '99'), borderColor: colors, borderWidth: 1.5 }]
     },
     options: {
-      ...base,
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y}${unit ? ' ' + unit : ''}`
-          }
-        }
+        tooltip: { callbacks: { label: (c) => `${c.parsed.x} ${unit}` } }
+      },
+      scales: {
+        x: { ...AX.x, type: logScale ? 'logarithmic' : 'linear', title: { display: true, text: unit, color: '#5a6a7a', font: { size: 10 } } },
+        y: { ...AX.y, ticks: { ...AX.y.ticks, autoSkip: false, font: { size: 9 } } }
       }
     }
   });
@@ -906,60 +888,44 @@ function drawBar(cid, labels, vals, colors, yLabel, unit) {
 
 function drawCharts() {
   if (typeof Chart === 'undefined') return;
-
-  const COLORS = {
-    mte_copy_bw: '#ff5252', mte_startup_latency: '#ff9100', mte_granularity: '#ff6d00',
-    vector_add_latency: '#00e676', vector_mul_latency: '#00d4ff', vector_throughput: '#00bfa5',
-    vector_pipeline_depth: '#64ffda', scalar_arith_latency: '#ffd740', scalar_branch_overhead: '#ff9100'
-  };
-
-  for (const b of ok) {
-    drawFit(`chart_${b.name}`, b, COLORS[b.name] || '#888');
-  }
-
   const reliable = ok.filter(b => !b.unreliable);
 
-  // 按单位分组，避免 GB/s 与 ns 混在同一坐标轴
+  for (const b of ok) {
+    drawPerOpFit(`chart_${b.name}`, b, COLORS[b.name] || '#888');
+  }
+
   const bwItems = reliable.filter(b => b.derived.bandwidth_gbs);
-  drawBar('overview_bw',
-    bwItems.map(b => b.label),
-    bwItems.map(b => b.derived.bandwidth_gbs),
-    bwItems.map(b => COLORS[b.name] || '#888'),
-    'GB/s', 'GB/s');
+  drawHBar('overview_bw', bwItems.map(b => b.label), bwItems.map(b => b.derived.bandwidth_gbs),
+    bwItems.map(b => COLORS[b.name]), 'GB/s', false);
 
   const tpItems = reliable.filter(b => b.derived.gflops);
-  drawBar('overview_gflops',
-    tpItems.map(b => b.label),
-    tpItems.map(b => b.derived.gflops),
-    tpItems.map(b => COLORS[b.name] || '#888'),
-    'GFLOPS', 'GFLOPS');
+  drawHBar('overview_gflops', tpItems.map(b => b.label), tpItems.map(b => b.derived.gflops),
+    tpItems.map(b => COLORS[b.name]), 'GFLOPS', false);
 
   const latItems = reliable.filter(b => b.derived.latency_ns);
-  drawBar('overview_lat',
-    latItems.map(b => b.label),
-    latItems.map(b => b.derived.latency_ns),
-    latItems.map(b => COLORS[b.name] || '#888'),
-    'ns', 'ns');
+  drawHBar('overview_lat', latItems.map(b => b.label), latItems.map(b => b.derived.latency_ns),
+    latItems.map(b => COLORS[b.name]), 'ns', true);
 
-  const allLabels = ok.map(b => b.label);
   const r2s = ok.map(b => b.r2);
-  const r2colors = r2s.map(v => v >= 0.99 ? '#00e67688' : v >= 0.95 ? '#ffd74088' : '#ff525288');
-  const r2borders = r2s.map(v => v >= 0.99 ? '#00e676' : v >= 0.95 ? '#ffd740' : '#ff5252');
-
   const el2 = document.getElementById('overview_r2');
   if (el2) {
     new Chart(el2.getContext('2d'), {
       type: 'bar',
       data: {
-        labels: allLabels,
-        datasets: [{ label: 'R²', data: r2s, backgroundColor: r2colors, borderColor: r2borders, borderWidth: 2 }]
+        labels: ok.map(b => b.label),
+        datasets: [{
+          data: r2s,
+          backgroundColor: r2s.map(v => v >= 0.99 ? '#00e67688' : v >= 0.95 ? '#ffd74088' : '#ff525288'),
+          borderColor: r2s.map(v => v >= 0.99 ? '#00e676' : v >= 0.95 ? '#ffd740' : '#ff5252'),
+          borderWidth: 1.5
+        }]
       },
       options: {
-        ...CO('R²'),
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: CO('').scales.x,
-          y: { min: 0.9, max: 1.0005, ticks: { color: '#5a6a7a' }, grid: { color: 'rgba(255,255,255,.04)' } }
+          x: { min: 0.9, max: 1.0001, ...AX.x, title: { display: true, text: 'R²', color: '#5a6a7a', font: { size: 10 } } },
+          y: { ...AX.y, ticks: { font: { size: 9 }, color: '#5a6a7a' } }
         }
       }
     });
@@ -970,25 +936,12 @@ function drawCharts() {
 function render() {
   let html = '';
   html += renderMetrics();
-  html += renderConfig();
-
-  // MTE
-  html += renderSection('MTE — 内存拷贝引擎 (Data Move Unit)', '📦', 'mte',
-    mte, `${mte.filter(b=>b.status==='ok').length}/${mte.length} 通过`, 'bd-ok');
-
-  // Vector
-  html += renderSection('Vector — 向量计算单元 (Vector Processing Unit)', '⚡', 'vec',
-    vec, `${vec.filter(b=>b.status==='ok').length}/${vec.length} 通过`, 'bd-ok');
-
-  // Scalar
-  html += renderSection('Scalar — 标量处理单元 (Scalar Unit)', '🔢', 'scl',
-    scl, `${scl.filter(b=>b.status==='ok').length}/${scl.length} 通过 (1 项低可信度)`, 'bd-warn');
-
-  // Cube
-  html += renderCube();
-
-  // Overview
   html += renderOverview();
+  html += renderMasterTable();
+  html += renderFitGrid();
+  html += renderRawTable();
+  html += renderConfig();
+  html += renderCube();
 
   document.getElementById('app').innerHTML = html;
   if (typeof Chart === 'undefined') {
