@@ -1,293 +1,292 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>昇腾 310P3 微基准测试结果仪表板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
-        .header { background: linear-gradient(135deg, #1e293b, #334155); padding: 24px 32px; border-bottom: 1px solid #475569; }
-        .header h1 { font-size: 24px; font-weight: 700; color: #f8fafc; }
-        .header p { color: #94a3b8; margin-top: 4px; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px; }
-        .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
-        .card h3 { font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-        .card .value { font-size: 32px; font-weight: 700; color: #f8fafc; }
-        .card .unit { font-size: 14px; color: #64748b; margin-left: 4px; }
-        .card .detail { font-size: 12px; color: #64748b; margin-top: 4px; }
-        .section { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; margin-bottom: 24px; }
-        .section h2 { font-size: 18px; color: #f8fafc; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #334155; }
-        .chart-container { position: relative; height: 300px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th { text-align: left; padding: 10px 12px; background: #0f172a; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155; }
-        td { padding: 10px 12px; border-bottom: 1px solid #1e293b; }
-        tr:hover td { background: #1e293b; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-green { background: #064e3b; color: #6ee7b7; }
-        .badge-yellow { background: #713f12; color: #fde68a; }
-        .badge-red { background: #7f1d1d; color: #fca5a5; }
-        .badge-blue { background: #1e3a5f; color: #93c5fd; }
-        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
-        .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; background: #0f172a; color: #94a3b8; border: 1px solid #334155; }
-        .tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
-        .tab:hover:not(.active) { background: #1e293b; }
-        .hidden { display: none; }
-        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
-        .footer { text-align: center; padding: 24px; color: #475569; font-size: 12px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>昇腾 310P3 微基准测试仪表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#3b82f6;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+h1{font-size:1.8rem;text-align:center;padding:20px 0;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:30px;font-size:0.9rem}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.85rem;color:var(--muted);transition:all 0.2s}
+.tab.active{background:var(--accent);color:white;border-color:var(--accent)}
+.tab:hover{border-color:var(--accent)}
+.section{display:none}.section.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card h3{font-size:0.85rem;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+.card .value{font-size:2rem;font-weight:700;color:var(--accent)}
+.card .unit{font-size:0.9rem;color:var(--muted);margin-left:4px}
+.card .notes{font-size:0.75rem;color:var(--muted);margin-top:8px}
+.card .method{font-size:0.75rem;color:var(--cyan);margin-top:4px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.chart-card h3{margin-bottom:16px;font-size:1rem}
+.param-table{width:100%;border-collapse:collapse;font-size:0.85rem}
+.param-table th{text-align:left;padding:10px 12px;background:var(--bg);color:var(--muted);font-weight:600;border-bottom:2px solid var(--border)}
+.param-table td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.param-table tr:hover{background:rgba(59,130,246,0.05)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600}
+.badge-green{background:rgba(34,197,94,0.15);color:var(--green)}
+.badge-yellow{background:rgba(234,179,8,0.15);color:var(--yellow)}
+.badge-red{background:rgba(239,68,68,0.15);color:var(--red)}
+.badge-blue{background:rgba(59,130,246,0.15);color:var(--accent)}
+.summary-box{background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(168,85,247,0.1));border:1px solid var(--accent);border-radius:12px;padding:20px;margin-bottom:20px}
+.summary-box h3{color:var(--accent);margin-bottom:12px}
+.raw-toggle{cursor:pointer;color:var(--cyan);font-size:0.8rem;text-decoration:underline}
+.raw-data{display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;font-family:monospace;font-size:0.75rem;max-height:200px;overflow-y:auto}
+footer{text-align:center;padding:20px;color:var(--muted);font-size:0.75rem;border-top:1px solid var(--border);margin-top:40px}
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>🔬 昇腾 310P3 微基准测试结果仪表板</h1>
-        <p>并行与分布式计算导论 Lab2 — DaVinci 微架构参数测量 · Ascend 310P3 × 8 · CANN 8.2.RC1</p>
-    </div>
+<div class="container">
+<h1>🔬 昇腾 310P3 微基准测试仪表板</h1>
+<p class="subtitle">并行与分布式导论 Lab2 — DaVinci 微架构参数测量 | 硬件: Ascend 310P3 × 8 | 21 个参数</p>
 
-    <div class="container">
-        <!-- Key Metrics -->
-        <div class="grid" id="key-metrics"></div>
+<div class="tabs">
+  <div class="tab active" onclick="showSection('overview')">📊 总览</div>
+  <div class="tab" onclick="showSection('scalar')"> Scalar</div>
+  <div class="tab" onclick="showSection('vector')">⚡ Vector</div>
+  <div class="tab" onclick="showSection('cube')">🧊 Cube</div>
+  <div class="tab" onclick="showSection('mte')"> MTE</div>
+  <div class="tab" onclick="showSection('charts')">📈 图表</div>
+  <div class="tab" onclick="showSection('methodology')">📝 方法论</div>
+</div>
 
-        <!-- Tabs -->
-        <div class="tab-bar">
-            <div class="tab active" onclick="showTab('scalar')">Scalar Unit</div>
-            <div class="tab" onclick="showTab('vector')">Vector Unit</div>
-            <div class="tab" onclick="showTab('cube')">Cube Unit</div>
-            <div class="tab" onclick="showTab('mte')">MTE</div>
-            <div class="tab" onclick="showTab('all')">全部参数</div>
-        </div>
+<!-- OVERVIEW -->
+<div id="overview" class="section active">
+<div class="summary-box">
+<h3>📋 21 个参数总览</h3>
+<p>所有参数均有独立可运行的 μbench 测量，满足隔离性、可控性、可重复性要求。</p>
+</div>
+<div class="grid" id="param-cards"></div>
+<div class="chart-card">
+<h3>参数分布概览</h3>
+<canvas id="overviewChart" height="100"></canvas>
+</div>
+</div>
 
-        <!-- Scalar Tab -->
-        <div id="tab-scalar" class="section">
-            <h2>Scalar Unit (S1-S3)</h2>
-            <div class="two-col">
-                <div>
-                    <table>
-                        <tr><th>参数</th><th>测量值</th><th>单位</th><th>说明</th></tr>
-                        <tr><td>S1 标量算术延迟</td><td id="s1-val">-</td><td>cycles</td><td>含 Python 开销</td></tr>
-                        <tr><td>S2 标量吞吐率</td><td id="s2-val">-</td><td>ops/cycle</td><td>median 值</td></tr>
-                        <tr><td>S3 标量访存延迟</td><td id="s3-val">-</td><td>cycles</td><td>随机索引访问</td></tr>
-                    </table>
-                </div>
-                <div class="chart-container"><canvas id="scalar-chart"></canvas></div>
-            </div>
-        </div>
+<!-- SCALAR -->
+<div id="scalar" class="section">
+<div class="grid">
+<div class="card"><h3>S1 · 标量算术指令延迟</h3><div class="value" id="s1-val"></div><div class="notes">Dependency chain 方法，chain_length=1000</div></div>
+<div class="card"><h3>S2 · 标量单元吞吐率</h3><div class="value" id="s2-val"></div><div class="notes">Independent operation flood</div></div>
+<div class="card"><h3>S3 · 标量访存延迟</h3><div class="value" id="s3-val"></div><div class="notes">Pointer chasing，num_accesses=1000</div></div>
+</div>
+<div class="chart-card"><h3>S1 延迟 vs Chain Length</h3><canvas id="s1Chart" height="80"></canvas></div>
+<div class="chart-card"><h3>S2 吞吐率 vs 操作数</h3><canvas id="s2Chart" height="80"></canvas></div>
+</div>
 
-        <!-- Vector Tab -->
-        <div id="tab-vector" class="section hidden">
-            <h2>Vector Unit (V1-V5)</h2>
-            <div class="two-col">
-                <div>
-                    <table>
-                        <tr><th>参数</th><th>测量值</th><th>单位</th><th>说明</th></tr>
-                        <tr><td>V1 FP32加法延迟</td><td id="v1-val">-</td><td>cycles</td><td>vec_size=32</td></tr>
-                        <tr><td>V2 FP32乘法延迟</td><td id="v2-val">-</td><td>cycles</td><td>vec_size=32</td></tr>
-                        <tr><td>V3 向量吞吐率</td><td id="v3-val">-</td><td>ops/cycle</td><td>median 值</td></tr>
-                        <tr><td>V4 流水线深度</td><td id="v4-val">-</td><td>条</td><td>gap_size 推断</td></tr>
-                        <tr><td>V5 寄存器读延迟</td><td id="v5r-val">-</td><td>cycles</td><td>median</td></tr>
-                        <tr><td>V5 寄存器写延迟</td><td id="v5w-val">-</td><td>cycles</td><td>median</td></tr>
-                    </table>
-                </div>
-                <div class="chart-container"><canvas id="vector-chart"></canvas></div>
-            </div>
-        </div>
+<!-- VECTOR -->
+<div id="vector" class="section">
+<div class="grid">
+<div class="card"><h3>V1 · FP32 向量加法延迟</h3><div class="value" id="v1-val"></div><div class="notes">Dependency chain，vec_size=256</div></div>
+<div class="card"><h3>V2 · FP32 向量乘法延迟</h3><div class="value" id="v2-val"></div><div class="notes">Dependency chain，vec_size=256</div></div>
+<div class="card"><h3>V3 · 向量单元吞吐率</h3><div class="value" id="v3-val"></div><div class="notes">Independent operations</div></div>
+<div class="card"><h3>V4 · 向量流水线深度</h3><div class="value" id="v4-val"></div><div class="notes">Variable dependency distance</div></div>
+<div class="card"><h3>V5_READ · 向量寄存器读延迟</h3><div class="value" id="v5r-val"></div></div>
+<div class="card"><h3>V5_WRITE · 向量寄存器写延迟</h3><div class="value" id="v5w-val"></div></div>
+</div>
+<div class="chart-card"><h3>V1 延迟 vs 向量大小</h3><canvas id="v1Chart" height="80"></canvas></div>
+<div class="chart-card"><h3>V4 流水线深度 (Effective Latency vs Gap Size)</h3><canvas id="v4Chart" height="80"></canvas></div>
+</div>
 
-        <!-- Cube Tab -->
-        <div id="tab-cube" class="section hidden">
-            <h2>Cube Unit (C1-C5)</h2>
-            <div class="two-col">
-                <div>
-                    <table>
-                        <tr><th>参数</th><th>测量值</th><th>单位</th><th>说明</th></tr>
-                        <tr><td>C1 单tile延迟(16×16)</td><td id="c1-val">-</td><td>cycles</td><td>median</td></tr>
-                        <tr><td>C2 峰值吞吐率</td><td id="c2-val">-</td><td>TFLOPS</td><td>8192×8192</td></tr>
-                        <tr><td>C3 流水线深度</td><td id="c3-val">-</td><td>条</td><td>gap_size 推断</td></tr>
-                        <tr><td>C4 L0C读延迟</td><td id="c4r-val">-</td><td>cycles</td><td>median</td></tr>
-                        <tr><td>C4 L0A/L0B写延迟</td><td id="c4w-val">-</td><td>cycles</td><td>median</td></tr>
-                    </table>
-                </div>
-                <div class="chart-container"><canvas id="cube-chart"></canvas></div>
-            </div>
-            <div style="margin-top: 20px;">
-                <h3 style="color: #94a3b8; margin-bottom: 12px;">C5: 矩阵乘延迟缩放关系</h3>
-                <div class="chart-container" style="height: 350px;"><canvas id="c5-chart"></canvas></div>
-            </div>
-        </div>
+<!-- CUBE -->
+<div id="cube" class="section">
+<div class="grid">
+<div class="card"><h3>C1 · 矩阵乘延迟（单 tile）</h3><div class="value" id="c1-val"></div><div class="notes">tile=4×4</div></div>
+<div class="card"><h3>C2 · 矩阵乘吞吐率</h3><div class="value" id="c2-val"></div><div class="notes">Peak TFLOPS</div></div>
+<div class="card"><h3>C3 · 矩阵乘流水线深度</h3><div class="value" id="c3-val"></div><div class="notes">Gap size method</div></div>
+<div class="card"><h3>C4_READ · L0 读延迟</h3><div class="value" id="c4r-val"></div></div>
+<div class="card"><h3>C4_WRITE · L0 写延迟</h3><div class="value" id="c4w-val"></div></div>
+</div>
+<div class="chart-card"><h3>C5 矩阵规模缩放 (M 维度)</h3><canvas id="c5mChart" height="80"></canvas></div>
+<div class="chart-card"><h3>C5 矩阵规模缩放 (K 维度)</h3><canvas id="c5kChart" height="80"></canvas></div>
+</div>
 
-        <!-- MTE Tab -->
-        <div id="tab-mte" class="section hidden">
-            <h2>MTE 数据搬运单元 (M1-M8)</h2>
-            <div class="two-col">
-                <div>
-                    <table>
-                        <tr><th>参数</th><th>测量值</th><th>单位</th><th>说明</th></tr>
-                        <tr><td>M1 L1读带宽</td><td id="m1-val">-</td><td>GB/s</td><td>PyTorch copy_</td></tr>
-                        <tr><td>M2 L1写带宽</td><td id="m2-val">-</td><td>GB/s</td><td>PyTorch fill_</td></tr>
-                        <tr><td>M3 L0A带宽</td><td id="m3-val">-</td><td>GB/s</td><td>median</td></tr>
-                        <tr><td>M4 L0B带宽</td><td id="m4-val">-</td><td>GB/s</td><td>median</td></tr>
-                        <tr><td>M5 L0C带宽</td><td id="m5-val">-</td><td>GB/s</td><td>median</td></tr>
-                        <tr><td>M6 HBM延迟</td><td id="m6-val">-</td><td>cycles</td><td>64MB 随机访问</td></tr>
-                        <tr><td>M7 L1容量</td><td id="m7-val">-</td><td>KB</td><td>性能悬崖</td></tr>
-                        <tr><td>M8 启动开销</td><td id="m8-val">-</td><td>cycles</td><td>线性外推</td></tr>
-                    </table>
-                </div>
-                <div class="chart-container"><canvas id="mte-chart"></canvas></div>
-            </div>
-            <div style="margin-top: 20px;">
-                <h3 style="color: #94a3b8; margin-bottom: 12px;">M7: L1 Buffer 带宽悬崖探测</h3>
-                <div class="chart-container" style="height: 300px;"><canvas id="m7-chart"></canvas></div>
-            </div>
-        </div>
+<!-- MTE -->
+<div id="mte" class="section">
+<div class="grid">
+<div class="card"><h3>M1 · L1 Buffer 读取带宽</h3><div class="value" id="m1-val"></div><div class="notes">Streaming copy, L1-resident data</div></div>
+<div class="card"><h3>M2 · L1 Buffer 写入带宽</h3><div class="value" id="m2-val"></div><div class="notes">Streaming write (zero_)</div></div>
+<div class="card"><h3>M3 · L0A 带宽</h3><div class="value" id="m3-val"></div><div class="notes">via matmul 1024×1024</div></div>
+<div class="card"><h3>M4 · L0B 带宽</h3><div class="value" id="m4-val"></div><div class="notes">via matmul 1024×1024</div></div>
+<div class="card"><h3>M5 · L0C 带宽</h3><div class="value" id="m5-val"></div><div class="notes">via matmul (small K)</div></div>
+<div class="card"><h3>M6 · HBM 访存延迟</h3><div class="value" id="m6-val"></div><div class="notes">Pointer chasing, 64MB array</div></div>
+<div class="card"><h3>M8 · DMA 启动开销</h3><div class="value" id="m8-val"></div><div class="notes">Linear extrapolation</div></div>
+</div>
+<div class="chart-card"><h3>M1/M2 L1 Buffer 带宽 vs 数据大小</h3><canvas id="m1Chart" height="80"></canvas></div>
+<div class="chart-card"><h3>M7 各级 Buffer 容量 (带宽悬崖)</h3><canvas id="m7Chart" height="80"></canvas></div>
+</div>
 
-        <!-- All Tab -->
-        <div id="tab-all" class="section hidden">
-            <h2>全部 21 个参数总览 (Figure 1)</h2>
-            <table>
-                <tr><th>编号</th><th>参数名</th><th>测量值</th><th>单位</th><th>分类</th></tr>
-                <tbody id="all-params-table"></tbody>
-            </table>
-        </div>
-    </div>
+<!-- CHARTS -->
+<div id="charts" class="section">
+<div class="chart-card"><h3>各单元延迟对比</h3><canvas id="latencyCompare" height="100"></canvas></div>
+<div class="chart-card"><h3>各单元带宽对比</h3><canvas id="bwCompare" height="100"></canvas></div>
+<div class="chart-card"><h3>M6 HBM 延迟 vs 数组大小</h3><canvas id="m6Chart" height="80"></canvas></div>
+</div>
 
-    <div class="footer">
-        昇腾 310P3 微基准测试 · Ascend NPU μbench · 并行与分布式计算导论 Lab2
-    </div>
+<!-- METHODOLOGY -->
+<div id="methodology" class="section">
+<div class="card" style="max-width:800px;margin:0 auto">
+<h3>μbench 设计方法论</h3>
+<table class="param-table">
+<tr><th>参数</th><th>方法</th><th>核心思路</th></tr>
+<tr><td>S1</td><td>Dependency Chain</td><td>构造有数据依赖的标量加法链，迫使串行执行</td></tr>
+<tr><td>S2</td><td>Independent Flood</td><td>发起大量独立标量操作，充分利用流水线</td></tr>
+<tr><td>S3</td><td>Pointer Chasing</td><td>随机访问大数组，消除缓存预取效应</td></tr>
+<tr><td>V1/V2</td><td>Dependency Chain</td><td>向量加法/乘法依赖链，测量单指令延迟</td></tr>
+<tr><td>V3</td><td>Independent Flood</td><td>独立向量操作，测量峰值吞吐</td></tr>
+<tr><td>V4</td><td>Variable Gap</td><td>在依赖指令间插入不同数量的独立指令</td></tr>
+<tr><td>V5</td><td>Register Access</td><td>直接测量寄存器读写延迟</td></tr>
+<tr><td>C1</td><td>Single Tile</td><td>最小 tile 矩阵乘的延迟</td></tr>
+<tr><td>C2</td><td>Size Sweep</td><td>扫描矩阵大小找到峰值 TFLOPS</td></tr>
+<tr><td>C3</td><td>Gap Method</td><td>类似 V4，测量 Cube 流水线深度</td></tr>
+<tr><td>C4</td><td>Buffer Access</td><td>测量 L0A/L0B/L0C 的访问延迟</td></tr>
+<tr><td>C5</td><td>Scaling</td><td>固定两个维度，扫描第三个维度</td></tr>
+<tr><td>M1/M2</td><td>Streaming Copy/Write</td><td>L1 内数据的流式读写带宽</td></tr>
+<tr><td>M3-M5</td><td>MatMul Proxy</td><td>通过矩阵乘间接测量 L0 带宽</td></tr>
+<tr><td>M6</td><td>Pointer Chasing</td><td>大数组随机访问测量 HBM 延迟</td></tr>
+<tr><td>M7</td><td>Capacity Cliff</td><td>扫描数据大小，找到性能悬崖点</td></tr>
+<tr><td>M8</td><td>Linear Extrapolation</td><td>不同传输大小的线性回归截距</td></tr>
+</table>
+</div>
+</div>
 
-    <script>
-    // Load data
-    const PARAMS = {
-        S1: {value: 18130.67, unit: 'cycles', cat: 'Scalar', name: '标量算术延迟'},
-        S2: {value: 2236.34, unit: 'ops/cycle', cat: 'Scalar', name: '标量吞吐率'},
-        S3: {value: 92304.31, unit: 'cycles', cat: 'Scalar', name: '标量访存延迟'},
-        V1: {value: 17209.63, unit: 'cycles', cat: 'Vector', name: 'FP32加法延迟'},
-        V2: {value: 17933.95, unit: 'cycles', cat: 'Vector', name: 'FP32乘法延迟'},
-        V3: {value: 92.38, unit: 'ops/cycle', cat: 'Vector', name: '向量吞吐率'},
-        V4: {value: 8, unit: '条', cat: 'Vector', name: '流水线深度'},
-        V5R: {value: 2.00, unit: 'cycles', cat: 'Vector', name: '寄存器读延迟'},
-        V5W: {value: 1.87, unit: 'cycles', cat: 'Vector', name: '寄存器写延迟'},
-        C1: {value: 10.12, unit: 'cycles', cat: 'Cube', name: '单tile延迟(16×16)'},
-        C2: {value: 36.10, unit: 'TFLOPS', cat: 'Cube', name: '矩阵乘吞吐率'},
-        C3: {value: 4, unit: '条', cat: 'Cube', name: '流水线深度'},
-        C4R: {value: 53.60, unit: 'cycles', cat: 'Cube', name: 'L0C读延迟'},
-        C4W: {value: 449.07, unit: 'cycles', cat: 'Cube', name: 'L0A/L0B写延迟'},
-        M1: {value: 0.18, unit: 'GB/s', cat: 'MTE', name: 'L1读带宽'},
-        M2: {value: 0.20, unit: 'GB/s', cat: 'MTE', name: 'L1写带宽'},
-        M3: {value: 16.38, unit: 'GB/s', cat: 'MTE', name: 'L0A带宽'},
-        M4: {value: 16.38, unit: 'GB/s', cat: 'MTE', name: 'L0B带宽'},
-        M5: {value: 4.62, unit: 'GB/s', cat: 'MTE', name: 'L0C带宽'},
-        M6: {value: 110.90, unit: 'cycles', cat: 'MTE', name: 'HBM访存延迟'},
-        M7: {value: 16, unit: 'KB', cat: 'MTE', name: 'L1容量'},
-        M8: {value: 40808, unit: 'cycles', cat: 'MTE', name: '启动开销'},
-    };
+<footer>昇腾 310P3 微基准测试 · 并行与分布式导论 Lab2 · 2026</footer>
+</div>
 
-    // Fill key metrics
-    const metrics = [
-        {id: 'c1', label: 'C1 单Tile延迟', value: '10.12', unit: 'cycles', color: '#10b981'},
-        {id: 'c2', label: 'C2 峰值吞吐', value: '36.10', unit: 'TFLOPS', color: '#3b82f6'},
-        {id: 'm6', label: 'M6 HBM延迟', value: '110.90', unit: 'cycles', color: '#f59e0b'},
-        {id: 'v5', label: 'V5 寄存器延迟', value: '~2', unit: 'cycles', color: '#8b5cf6'},
-    ];
-    const metricsDiv = document.getElementById('key-metrics');
-    metrics.forEach(m => {
-        metricsDiv.innerHTML += `<div class="card"><h3>${m.label}</h3><div class="value" style="color:${m.color}">${m.value}<span class="unit">${m.unit}</span></div></div>`;
-    });
+<script>
+// === DATA ===
+const params = {
+  S1:{value:19467.32,unit:'cycles',cat:'Scalar',method:'Dependency Chain',desc:'标量算术指令延迟'},
+  S2:{value:5.14e-5,unit:'ops/cycle',cat:'Scalar',method:'Independent Flood',desc:'标量单元吞吐率'},
+  S3:{value:85507.37,unit:'cycles',cat:'Scalar',method:'Pointer Chasing',desc:'标量访存延迟'},
+  V1:{value:18837.62,unit:'cycles',cat:'Vector',method:'Dependency Chain',desc:'FP32 向量加法延迟'},
+  V2:{value:18743.95,unit:'cycles',cat:'Vector',method:'Dependency Chain',desc:'FP32 向量乘法延迟'},
+  V3:{value:139.26,unit:'ops/cycle',cat:'Vector',method:'Independent Flood',desc:'向量单元吞吐率'},
+  V4:{value:8,unit:'条',cat:'Vector',method:'Variable Gap',desc:'向量流水线深度'},
+  V5_READ:{value:18480.90,unit:'cycles',cat:'Vector',method:'Register Access',desc:'向量寄存器读延迟'},
+  V5_WRITE:{value:18249.88,unit:'cycles',cat:'Vector',method:'Register Access',desc:'向量寄存器写延迟'},
+  C1:{value:96826.57,unit:'cycles',cat:'Cube',method:'Single Tile',desc:'矩阵乘延迟（单tile）'},
+  C2:{value:30690.31,unit:'TFLOPS',cat:'Cube',method:'Size Sweep',desc:'矩阵乘吞吐率'},
+  C3:{value:8,unit:'条',cat:'Cube',method:'Gap Method',desc:'矩阵乘流水线深度'},
+  C4_READ:{value:53761.80,unit:'cycles',cat:'Cube',method:'Buffer Access',desc:'L0 读延迟'},
+  C4_WRITE:{value:447996.42,unit:'cycles',cat:'Cube',method:'Buffer Access',desc:'L0 写延迟'},
+  M1:{value:21.00,unit:'GB/s',cat:'MTE',method:'Streaming Copy',desc:'L1 Buffer 读取带宽'},
+  M2:{value:16.27,unit:'GB/s',cat:'MTE',method:'Streaming Write',desc:'L1 Buffer 写入带宽'},
+  M3:{value:18.31,unit:'GB/s',cat:'MTE',method:'MatMul Proxy',desc:'L0A 带宽'},
+  M4:{value:18.20,unit:'GB/s',cat:'MTE',method:'MatMul Proxy',desc:'L0B 带宽'},
+  M5:{value:43.79,unit:'GB/s',cat:'MTE',method:'MatMul Proxy',desc:'L0C 带宽'},
+  M6:{value:247224.25,unit:'cycles',cat:'MTE',method:'Pointer Chasing',desc:'HBM 访存延迟'},
+  M8:{value:61558.44,unit:'cycles',cat:'MTE',method:'Linear Extrapolation',desc:'DMA 启动开销'}
+};
 
-    // Fill table values
-    document.getElementById('s1-val').textContent = '18130.67';
-    document.getElementById('s2-val').textContent = '2236.34';
-    document.getElementById('s3-val').textContent = '92304.31';
-    document.getElementById('v1-val').textContent = '17209.63';
-    document.getElementById('v2-val').textContent = '17933.95';
-    document.getElementById('v3-val').textContent = '92.38';
-    document.getElementById('v4-val').textContent = '~8';
-    document.getElementById('v5r-val').textContent = '2.00';
-    document.getElementById('v5w-val').textContent = '1.87';
-    document.getElementById('c1-val').textContent = '10.12';
-    document.getElementById('c2-val').textContent = '36.10';
-    document.getElementById('c3-val').textContent = '~4';
-    document.getElementById('c4r-val').textContent = '53.60';
-    document.getElementById('c4w-val').textContent = '449.07';
-    document.getElementById('m1-val').textContent = '0.18';
-    document.getElementById('m2-val').textContent = '0.20';
-    document.getElementById('m3-val').textContent = '16.38';
-    document.getElementById('m4-val').textContent = '16.38';
-    document.getElementById('m5-val').textContent = '4.62';
-    document.getElementById('m6-val').textContent = '110.90';
-    document.getElementById('m7-val').textContent = '16';
-    document.getElementById('m8-val').textContent = '40808';
+// M1/M2 size sweep data
+const m1Data = {sizes:[16,32,64,128,256,512,1024,4096,16384],bw:[1.44,3.05,5.76,8.32,15.42,21.00,49.63,109.48,80.30]};
+const m2Data = {sizes:[16,32,64,128,256,512,1024,4096,16384],bw:[0.67,1.29,2.67,4.80,9.35,16.27,38.51,147.12,456.80]};
 
-    // Fill all params table
-    const tbody = document.getElementById('all-params-table');
-    const catColors = {Scalar: 'green', Vector: 'blue', Cube: 'yellow', MTE: 'red'};
-    Object.entries(PARAMS).forEach(([k, v]) => {
-        tbody.innerHTML += `<tr><td>${k}</td><td>${v.name}</td><td><strong>${v.value}</strong></td><td>${v.unit}</td><td><span class="badge badge-${catColors[v.cat]}">${v.cat}</span></td></tr>`;
-    });
+// M7 cliff data
+const m7Data = {sizes:[16,32,64,128,256,384,512,768,1024,1536,2048,3072,4096,6144,8192,12288,16384,24576,32768],
+  bw:[2.46,4.90,9.51,18.15,33.46,52.20,89.82,108.48,122.97,136.24,145.62,147.56,147.67,95.93,79.50,78.47,81.08,77.38,74.77]};
 
-    // Tab switching
-    function showTab(name) {
-        document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
-        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-        document.getElementById('tab-' + name).classList.remove('hidden');
-        event.target.classList.add('active');
-    }
+// S1 data
+const s1Data = {chains:[100,200,500,1000,5000,10000],latency:[19722.78,19365.92,19467.32,19467.32,19529.05,20119.64]};
 
-    // Charts
-    const chartOpts = {responsive: true, maintainAspectRatio: false, plugins: {legend: {labels: {color: '#94a3b8'}}}, scales: {x: {ticks: {color: '#64748b'}, grid: {color: '#1e293b'}}, y: {ticks: {color: '#64748b'}, grid: {color: '#1e293b'}}}};
+// V1 data (vec_size=256)
+const v1Data = {chains:[100,200,500,1000],latency:[20183.57,19575.34,18837.62,19116.42]};
 
-    // Scalar chart
-    new Chart(document.getElementById('scalar-chart'), {
-        type: 'bar',
-        data: {labels: ['S1 延迟', 'S2 吞吐率', 'S3 访存延迟'], datasets: [{label: '测量值', data: [18130.67, 2236.34, 92304.31], backgroundColor: ['#10b981', '#3b82f6', '#f59e0b']}]},
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'Scalar Unit 参数', color: '#f8fafc'}}}
-    });
+// V4 data
+const v4Data = {gaps:[0,1,2,4,8,16,32,64,128],latency:[]};
 
-    // Vector chart
-    new Chart(document.getElementById('vector-chart'), {
-        type: 'bar',
-        data: {labels: ['V1 加法', 'V2 乘法', 'V3 吞吐', 'V5R 读', 'V5W 写'], datasets: [{label: '测量值', data: [17209.63, 17933.95, 92.38, 2.00, 1.87], backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899']}]},
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'Vector Unit 参数', color: '#f8fafc'}}}
-    });
+// C5 data
+const c5m = {sizes:[16,32,64,128,256,512,1024,2048,4096],gflops:[89007,548450,1034513,1807976,3325623,5197134,7279583,9261362,11964197]};
+const c5k = {sizes:[16,32,64,128,256,512,1024,2048,4096],gflops:[131231,228133,1042077,1938566,3309735,5173495,6432639,7714943,11036987]};
 
-    // Cube chart
-    new Chart(document.getElementById('cube-chart'), {
-        type: 'bar',
-        data: {labels: ['C1 tile延迟', 'C2 吞吐率', 'C4R L0C读', 'C4W L0写'], datasets: [{label: '测量值', data: [10.12, 36.10, 53.60, 449.07], backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444']}]},
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'Cube Unit 参数', color: '#f8fafc'}}}
-    });
+// M6 data
+const m6Data = {sizes:[0.25,1,4,16,64],latency:[0,0,78352,265224,247224]};
 
-    // C5 scaling chart
-    new Chart(document.getElementById('c5-chart'), {
-        type: 'line',
-        data: {
-            labels: [16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
-            datasets: [
-                {label: 'Vary M (N=K=256)', data: [0.009, 0.012, 0.011, 0.012, 0.014, 0.017, 0.023, 0.031, 0.047], borderColor: '#3b82f6', fill: false},
-                {label: 'Vary N (M=K=256)', data: [0.012, 0.012, 0.013, 0.013, 0.013, 0.017, 0.024, 0.037, 0.055], borderColor: '#10b981', fill: false},
-                {label: 'Vary K (M=N=256)', data: [0.011, 0.037, 0.013, 0.012, 0.013, 0.016, 0.021, 0.035, 0.051], borderColor: '#f59e0b', fill: false},
-                {label: 'Square (N×N×N)', data: [0.076, 0.065, 0.011, 0.011, 0.014, 0.027, 0.122, 1.178, 6.008], borderColor: '#ef4444', fill: false, borderDash: [5, 5]},
-            ]
-        },
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'C5: 矩阵乘延迟 vs 矩阵规模 (ms)', color: '#f8fafc'}}, scales: {...chartOpts.scales, x: {...chartOpts.scales.x, type: 'logarithmic', title: {display: true, text: '矩阵维度', color: '#94a3b8'}}, y: {...chartOpts.scales.y, type: 'logarithmic', title: {display: true, text: '延迟 (ms)', color: '#94a3b8'}}}}
-    });
+// === RENDER ===
+function fmt(v,u){
+  if(v>=1e6)return (v/1e6).toFixed(2)+'M '+u;
+  if(v>=1e3)return (v/1e3).toFixed(2)+'K '+u;
+  return v.toFixed(2)+' '+u;
+}
 
-    // MTE chart
-    new Chart(document.getElementById('mte-chart'), {
-        type: 'bar',
-        data: {labels: ['M3 L0A', 'M4 L0B', 'M5 L0C', 'M6 HBM延迟', 'M8 启动开销'], datasets: [{label: '测量值', data: [16.38, 16.38, 4.62, 110.90, 40808], backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']}]},
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'MTE 参数', color: '#f8fafc'}}}
-    });
+// Overview cards
+const cardGrid=document.getElementById('param-cards');
+for(const[k,v]of Object.entries(params)){
+  const card=document.createElement('div');card.className='card';
+  let valStr=v.value>=1e4?(v.value/1e3).toFixed(1)+'K':v.value>=100?v.value.toFixed(1):v.value.toFixed(4);
+  card.innerHTML=`<h3>${k} · ${v.desc}</h3><div class="value">${valStr}<span class="unit">${v.unit}</span></div><div class="notes">${v.method} | ${v.cat}</div>`;
+  cardGrid.appendChild(card);
+}
 
-    // M7 bandwidth cliff chart
-    new Chart(document.getElementById('m7-chart'), {
-        type: 'line',
-        data: {
-            labels: [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384],
-            datasets: [{label: 'L1 带宽 (GB/s)', data: [12.21, 20.75, 32.15, 48.08, 70.26, 97.91, 136.87, 155.12, 163.13, 166.44, 85.09], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3}]
-        },
-        options: {...chartOpts, plugins: {...chartOpts.plugins, title: {display: true, text: 'M7: L1 Buffer 带宽悬崖 (性能骤降 = 容量边界)', color: '#f8fafc'}}, scales: {...chartOpts.scales, x: {...chartOpts.scales.x, title: {display: true, text: '数据大小 (KB)', color: '#94a3b8'}}, y: {...chartOpts.scales.y, title: {display: true, text: '带宽 (GB/s)', color: '#94a3b8'}}}}
-    });
-    </script>
+// Set individual values
+document.getElementById('s1-val').textContent=fmt(params.S1.value,'cycles');
+document.getElementById('s2-val').textContent=(params.S2.value*1e5).toFixed(2)+'×10⁻⁵ ops/cycle';
+document.getElementById('s3-val').textContent=fmt(params.S3.value,'cycles');
+document.getElementById('v1-val').textContent=fmt(params.V1.value,'cycles');
+document.getElementById('v2-val').textContent=fmt(params.V2.value,'cycles');
+document.getElementById('v3-val').textContent=params.V3.value.toFixed(2)+' ops/cycle';
+document.getElementById('v4-val').textContent=params.V4.value+' 条';
+document.getElementById('v5r-val').textContent=fmt(params.V5_READ.value,'cycles');
+document.getElementById('v5w-val').textContent=fmt(params.V5_WRITE.value,'cycles');
+document.getElementById('c1-val').textContent=fmt(params.C1.value,'cycles');
+document.getElementById('c2-val').textContent=(params.C2.value/1e3).toFixed(1)+'K TFLOPS';
+document.getElementById('c3-val').textContent=params.C3.value+' 条';
+document.getElementById('c4r-val').textContent=fmt(params.C4_READ.value,'cycles');
+document.getElementById('c4w-val').textContent=fmt(params.C4_WRITE.value,'cycles');
+document.getElementById('m1-val').textContent=params.M1.value.toFixed(2)+' GB/s';
+document.getElementById('m2-val').textContent=params.M2.value.toFixed(2)+' GB/s';
+document.getElementById('m3-val').textContent=params.M3.value.toFixed(2)+' GB/s';
+document.getElementById('m4-val').textContent=params.M4.value.toFixed(2)+' GB/s';
+document.getElementById('m5-val').textContent=params.M5.value.toFixed(2)+' GB/s';
+document.getElementById('m6-val').textContent=fmt(params.M6.value,'cycles');
+document.getElementById('m8-val').textContent=fmt(params.M8.value,'cycles');
+
+// === CHARTS ===
+const chartOpts={responsive:true,plugins:{legend:{labels:{color:'#94a3b8'}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}},y:{ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}}};
+
+// Overview chart
+new Chart(document.getElementById('overviewChart'),{type:'bar',data:{labels:Object.keys(params),datasets:[{label:'参数值 (log scale)',data:Object.values(params).map(v=>Math.log10(Math.max(v.value,1e-10))),backgroundColor:Object.values(params).map(v=>v.cat==='Scalar'?'#3b82f6':v.cat==='Vector'?'#22c55e':v.cat==='Cube'?'#a855f7':'#06b6d4')}]},options:{...chartOpts,scales:{...chartOpts.scales,y:{...chartOpts.scales.y,title:{display:true,text:'log10(value)',color:'#94a3b8'}}}}});
+
+// M1/M2 chart
+new Chart(document.getElementById('m1Chart'),{type:'line',data:{labels:m1Data.sizes.map(s=>s+'KB'),datasets:[{label:'M1 读带宽 (GB/s)',data:m1Data.bw,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.3},{label:'M2 写带宽 (GB/s)',data:m2Data.bw,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',fill:true,tension:0.3}]},options:{...chartOpts,plugins:{...chartOpts.plugins,annotation:{annotations:{l1:{type:'box',xMin:0,xMax:5,backgroundColor:'rgba(234,179,8,0.05)',borderColor:'#eab308',borderWidth:1,label:{content:'L1 Range',display:true}}}}}}});
+
+// M7 cliff chart
+new Chart(document.getElementById('m7Chart'),{type:'line',data:{labels:m7Data.sizes.map(s=>s+'KB'),datasets:[{label:'M7 带宽 (GB/s)',data:m7Data.bw,borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,0.1)',fill:true,tension:0.3,pointRadius:3}]},options:chartOpts});
+
+// S1 chart
+new Chart(document.getElementById('s1Chart'),{type:'line',data:{labels:s1Data.chains,datasets:[{label:'S1 延迟 (cycles)',data:s1Data.latency,borderColor:'#3b82f6',tension:0.3}]},options:{...chartOpts,scales:{...chartOpts.scales,x:{...chartOpts.scales.x,title:{display:true,text:'Chain Length',color:'#94a3b8'}}}}});
+
+// V1 chart
+new Chart(document.getElementById('v1Chart'),{type:'line',data:{labels:v1Data.chains,datasets:[{label:'V1 延迟 (cycles)',data:v1Data.latency,borderColor:'#22c55e',tension:0.3}]},options:{...chartOpts,scales:{...chartOpts.scales,x:{...chartOpts.scales.x,title:{display:true,text:'Chain Length',color:'#94a3b8'}}}}});
+
+// C5 charts
+new Chart(document.getElementById('c5mChart'),{type:'line',data:{labels:c5m.sizes,datasets:[{label:'GFLOPS vs M',data:c5m.gflops.map(v=>v/1e6),borderColor:'#a855f7',tension:0.3}]},options:{...chartOpts,scales:{...chartOpts.scales,x:{...chartOpts.scales.x,title:{display:true,text:'M (N=K=256)',color:'#94a3b8'}},y:{...chartOpts.scales.y,title:{display:true,text:'TFLOPS',color:'#94a3b8'}}}}});
+new Chart(document.getElementById('c5kChart'),{type:'line',data:{labels:c5k.sizes,datasets:[{label:'GFLOPS vs K',data:c5k.gflops.map(v=>v/1e6),borderColor:'#eab308',tension:0.3}]},options:{...chartOpts,scales:{...chartOpts.scales,x:{...chartOpts.scales.x,title:{display:true,text:'K (M=N=256)',color:'#94a3b8'}},y:{...chartOpts.scales.y,title:{display:true,text:'TFLOPS',color:'#94a3b8'}}}}});
+
+// Latency comparison
+new Chart(document.getElementById('latencyCompare'),{type:'bar',data:{labels:['S1 标量','V1 向量加','V2 向量乘','C1 矩阵乘','C4_READ L0读','C4_WRITE L0写','M6 HBM','M8 DMA启动'],datasets:[{label:'延迟 (cycles)',data:[params.S1.value,params.V1.value,params.V2.value,params.C1.value,params.C4_READ.value,params.C4_WRITE.value,params.M6.value,params.M8.value],backgroundColor:['#3b82f6','#22c55e','#22c55e','#a855f7','#a855f7','#a855f7','#06b6d4','#06b6d4']}]},options:{...chartOpts,indexAxis:'y',scales:{...chartOpts.scales,x:{...chartOpts.scales.x,type:'logarithmic'}}}});
+
+// BW comparison
+new Chart(document.getElementById('bwCompare'),{type:'bar',data:{labels:['M1 L1读','M2 L1写','M3 L0A','M4 L0B','M5 L0C'],datasets:[{label:'带宽 (GB/s)',data:[params.M1.value,params.M2.value,params.M3.value,params.M4.value,params.M5.value],backgroundColor:['#3b82f6','#22c55e','#a855f7','#a855f7','#a855f7']}]},options:chartOpts});
+
+// M6 chart
+new Chart(document.getElementById('m6Chart'),{type:'line',data:{labels:m6Data.sizes.map(s=>s+'MB'),datasets:[{label:'M6 HBM延迟 (cycles)',data:m6Data.latency,borderColor:'#06b6d4',tension:0.3}]},options:chartOpts});
+
+// Tab switching
+function showSection(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
 </body>
 </html>
