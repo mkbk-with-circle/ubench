@@ -60,28 +60,28 @@ class ScalarBranchKernel {
 }  // namespace
 
 extern "C" __global__ __aicore__ void scalar_arith_latency_target_kernel(
-    GM_ADDR, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   ScalarArithKernel<true> op;
   op.Init(output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void scalar_arith_latency_baseline_kernel(
-    GM_ADDR, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   ScalarArithKernel<false> op;
   op.Init(output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void scalar_branch_overhead_target_kernel(
-    GM_ADDR, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   ScalarBranchKernel<true> op;
   op.Init(output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void scalar_branch_overhead_baseline_kernel(
-    GM_ADDR, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   ScalarBranchKernel<false> op;
   op.Init(output);
   op.Process(repeats);

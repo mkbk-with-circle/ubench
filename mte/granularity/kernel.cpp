@@ -58,7 +58,7 @@ extern "C" __global__ __aicore__ void mte_granularity_target_kernel(
 
 extern "C" __global__ __aicore__ void mte_granularity_baseline_kernel(
     GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats,
-    uint32_t) {
+    uint32_t mode) {
   MteGranularityKernel op;
   op.Init(input, output, size_bytes < kMaxTileBytes ? kMaxTileBytes : size_bytes,
           1);

@@ -62,14 +62,14 @@ class MteStartupBaselineKernel {
 }  // namespace
 
 extern "C" __global__ __aicore__ void mte_startup_latency_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   MteStartupKernel op;
   op.Init(input, output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void mte_startup_latency_baseline_kernel(
-    GM_ADDR, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   MteStartupBaselineKernel op;
   op.Init(output);
   op.Process(repeats);

@@ -36,7 +36,7 @@ class VectorThroughputKernel {
         Add(out[2 * kElems], a[2 * kElems], b[2 * kElems], kElems);
         Add(out[3 * kElems], a[3 * kElems], b[3 * kElems], kElems);
       } else if ((i & 0x7ffu) == 0) {
-        out.SetValue(0, static_cast<float>(i));
+        { union { uint32_t u; float f; } c; c.u = i; out.SetValue(0, c.f); }
       }
     }
     PipeBarrier<PIPE_V>();
@@ -55,14 +55,14 @@ class VectorThroughputKernel {
 }  // namespace
 
 extern "C" __global__ __aicore__ void vector_throughput_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   VectorThroughputKernel<true> op;
   op.Init(input, output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void vector_throughput_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   VectorThroughputKernel<false> op;
   op.Init(input, output);
   op.Process(repeats);

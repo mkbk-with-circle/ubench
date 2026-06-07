@@ -68,14 +68,14 @@ class MteCopyBwBaselineKernel {
 }  // namespace
 
 extern "C" __global__ __aicore__ void mte_copy_bw_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   MteCopyBwKernel op;
   op.Init(input, output, size_bytes);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void mte_copy_bw_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   MteCopyBwBaselineKernel op;
   op.Init(input, output, size_bytes);
   op.Process(repeats);

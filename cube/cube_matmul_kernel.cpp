@@ -43,7 +43,7 @@ class CubeMatmulKernel {
         mm_.IterateAll(c_);
       } else if ((i & 0x7ffu) == 0) {
         // Keep the loop observable without issuing Cube work.
-        c_.SetValue(0, static_cast<float>(i));
+        { union { uint32_t u; float f; } c; c.u = i; c_.SetValue(0, c.f); }
       }
     }
   }
@@ -65,32 +65,32 @@ __aicore__ inline void RunCubeKernel(GM_ADDR input, GM_ADDR output,
 }  // namespace
 
 extern "C" __global__ __aicore__ void cube_tile_latency_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<true>(input, output, repeats, mode);
 }
 
 extern "C" __global__ __aicore__ void cube_tile_latency_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<false>(input, output, repeats, mode);
 }
 
 extern "C" __global__ __aicore__ void cube_throughput_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<true>(input, output, repeats, mode);
 }
 
 extern "C" __global__ __aicore__ void cube_throughput_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<false>(input, output, repeats, mode);
 }
 
 extern "C" __global__ __aicore__ void cube_scaling_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<true>(input, output, repeats, mode);
 }
 
 extern "C" __global__ __aicore__ void cube_scaling_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t mode) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   RunCubeKernel<false>(input, output, repeats, mode);
 }
 

@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(ASCEND_CANN_PACKAGE_PATH "$ENV{ASCEND_CANN_PACKAGE_PATH}" CACHE PATH
     "CANN install path")
 if(NOT ASCEND_CANN_PACKAGE_PATH)
-  set(ASCEND_CANN_PACKAGE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cann_wrapper")
+  set(ASCEND_CANN_PACKAGE_PATH "/usr/local/Ascend/ascend-toolkit/8.2.RC1/aarch64-linux")
 endif()
 
 set(ASCEND_SOC_VERSION "$ENV{ASCEND_SOC_VERSION}" CACHE STRING "Target SoC")
@@ -25,14 +25,11 @@ message(STATUS "ASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH}")
 message(STATUS "ASCEND_SOC_VERSION=${ASCEND_SOC_VERSION}")
 
 # ── Ascend C kernel build system ────────────────────────────────────────────
-set(ASCENDC_KERNEL_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/local_ascendc_cmake")
+set(ASCENDC_KERNEL_CMAKE_DIR "${ASCEND_CANN_PACKAGE_PATH}/tikcpp/ascendc_kernel_cmake")
 set(CMAKE_MODULE_PATH "${ASCENDC_KERNEL_CMAKE_DIR}" ${CMAKE_MODULE_PATH})
 
 # SOC_VERSION is required by host_config.cmake
 set(SOC_VERSION ${ASCEND_SOC_VERSION})
-
-message(STATUS "CMAKE_MODULE_PATH=${CMAKE_MODULE_PATH}")
-message(STATUS "ASCENDC_KERNEL_CMAKE_DIR=${ASCENDC_KERNEL_CMAKE_DIR}")
 include(ascendc)
 
 # ── Common host sources ─────────────────────────────────────────────────────
@@ -56,31 +53,15 @@ link_directories(
 # Each kernel.cpp is compiled with the Ascend C toolchain, producing a library
 # that contains both device code and host launch stubs.
 
-set(KERNEL_SOURCES
-  mte_copy_bw          mte/copy_bw/kernel.cpp
-  mte_startup_latency  mte/startup_latency/kernel.cpp
-  mte_granularity      mte/granularity/kernel.cpp
-  vector_add_latency   vector/add_latency/kernel.cpp
-  vector_mul_latency   vector/mul_latency/kernel.cpp
-  vector_throughput    vector/throughput/kernel.cpp
-  vector_pipeline_depth vector/pipeline_depth/kernel.cpp
-  cube_matmul          cube/cube_matmul_kernel.cpp
-  scalar               scalar/scalar_kernel.cpp
-)
-
-list(LENGTH KERNEL_SOURCES _ks_len)
-math(EXPR _ks_last "${_ks_len} - 1")
-foreach(_idx RANGE 0 ${_ks_last} 2)
-  math(EXPR _src_idx "${_idx} + 1")
-  list(GET KERNEL_SOURCES ${_idx} _kname)
-  list(GET KERNEL_SOURCES ${_src_idx} _ksrc)
-  set(_target "${_kname}_kernels")
-  ascendc_library(${_target} STATIC ${_ksrc})
-  # Add ACL include path for the precompile step
-  set_target_properties(${_target}_interface PROPERTIES
-    INCLUDES "${ASCEND_CANN_PACKAGE_PATH}/include;${CMAKE_CURRENT_SOURCE_DIR}/local_include"
-  )
-endforeach()
+ascendc_library(mte_copy_bw_kernels STATIC mte/copy_bw/kernel.cpp)
+ascendc_library(mte_startup_latency_kernels STATIC mte/startup_latency/kernel.cpp)
+ascendc_library(mte_granularity_kernels STATIC mte/granularity/kernel.cpp)
+ascendc_library(vector_add_latency_kernels STATIC vector/add_latency/kernel.cpp)
+ascendc_library(vector_mul_latency_kernels STATIC vector/mul_latency/kernel.cpp)
+ascendc_library(vector_throughput_kernels STATIC vector/throughput/kernel.cpp)
+ascendc_library(vector_pipeline_depth_kernels STATIC vector/pipeline_depth/kernel.cpp)
+ascendc_library(cube_matmul_kernels STATIC cube/cube_matmul_kernel.cpp)
+ascendc_library(scalar_kernels STATIC scalar/scalar_kernel.cpp)
 
 # ── Build host executables ──────────────────────────────────────────────────
 function(add_ubench name source kernel_lib)

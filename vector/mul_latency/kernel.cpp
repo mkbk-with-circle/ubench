@@ -31,7 +31,7 @@ class VectorMulLatencyKernel {
         Mul(acc, acc, a, kElems);
         PipeBarrier<PIPE_V>();
       } else if ((i & 0x7ffu) == 0) {
-        acc.SetValue(0, static_cast<float>(i + 1));
+        { union { uint32_t u; float f; } c; c.u = i + 1; acc.SetValue(0, c.f); }
       }
     }
     DataCopy(output_, acc, kElems);
@@ -48,14 +48,14 @@ class VectorMulLatencyKernel {
 }  // namespace
 
 extern "C" __global__ __aicore__ void vector_mul_latency_target_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   VectorMulLatencyKernel<true> op;
   op.Init(input, output);
   op.Process(repeats);
 }
 
 extern "C" __global__ __aicore__ void vector_mul_latency_baseline_kernel(
-    GM_ADDR input, GM_ADDR output, uint32_t, uint32_t repeats, uint32_t) {
+    GM_ADDR input, GM_ADDR output, uint32_t size_bytes, uint32_t repeats, uint32_t mode) {
   VectorMulLatencyKernel<false> op;
   op.Init(input, output);
   op.Process(repeats);

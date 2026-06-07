@@ -1,4 +1,11 @@
 build/
+build_full/
+build_ascend/
+build_host/
+cann_wrapper/
+local_ascendc_cmake/
+local_include/
+device_includes/
 results/*.csv
 results/*.txt
 results/summary.csv
