@@ -21,6 +21,20 @@
 
 **9/12 基准测试通过**，覆盖 MTE、Vector、Scalar 三大类微架构参数。
 
+### 推导指标
+
+根据 kernel 源码中的参数 (`kElems=256`, `kLanes=4`, `kTileBytes=1024`, `blocks=4`) 推导：
+
+| 指标 | 公式 | 结果 |
+|------|------|------|
+| MTE 拷贝带宽 | `blocks × kTileBytes × 2 / slope` = 4×1024×2 / 0.1236μs | **~66 GB/s** |
+| Vector FP32 吞吐 | `blocks × lanes × elems / slope` = 4×4×256 / 0.1142μs | **~36 GFLOPS** |
+| Vector ops/cycle | `lanes / (slope × freq)` = 4 / (0.1142μs × 1GHz) | **~0.035 ops/cycle** |
+
+> 注: MTE 每次 repeat 执行 GM→UB→GM 双向拷贝 (1024B×2 per block)，4 blocks 并行。
+> Vector 每次 repeat 发 4 条独立 256-element 向量 Add，4 blocks 并行。
+> ops/cycle 按 1GHz 估算；参考量级 (910B) ~1 ops/cycle，当前 ~0.035 说明未打满峰值，符合 micro-kernel 特征 (带 DataCopy/PipeBarrier、非满占流水线)。
+
 ---
 
 ## 本次所做的更改

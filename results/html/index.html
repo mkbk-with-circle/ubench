@@ -215,8 +215,8 @@
     <div class="metrics-grid">
         <div class="metric-card mte">
             <div class="label">MTE 拷贝带宽</div>
-            <div class="value">8.08</div>
-            <div class="unit">GB/s (65KB DataCopy)</div>
+            <div class="value">66.3</div>
+            <div class="unit">GB/s (4blk×2KB GM↔UB)</div>
         </div>
         <div class="metric-card mte">
             <div class="label">MTE 启动延迟</div>
@@ -230,8 +230,13 @@
         </div>
         <div class="metric-card vector">
             <div class="label">FP32 吞吐量</div>
-            <div class="value">8.76</div>
-            <div class="unit">GFLOPS (4-lane add)</div>
+            <div class="value">35.9</div>
+            <div class="unit">GFLOPS (4blk×4lane×256elem)</div>
+        </div>
+        <div class="metric-card vector">
+            <div class="label">Vector ops/cycle</div>
+            <div class="value">0.035</div>
+            <div class="unit">ops/cycle (@1GHz, 4lane×256elem)</div>
         </div>
         <div class="metric-card scalar">
             <div class="label">标量算术延迟</div>
@@ -242,6 +247,36 @@
             <div class="label">Cube 状态</div>
             <div class="value" style="font-size:1.4rem;">⚠ 超时</div>
             <div class="unit">Matmul 模板兼容性问题</div>
+        </div>
+    </div>
+
+    <!-- ═══ 测试配置说明 ═══ -->
+    <div class="section">
+        <div class="section-header">
+            <div class="icon" style="background:rgba(255,255,255,0.08);">⚙️</div>
+            <h2>测试配置 & 推导公式</h2>
+        </div>
+        <div class="section-body">
+            <div class="chart-grid">
+                <div class="chart-box" style="background:transparent;">
+                    <h3>运行参数</h3>
+                    <table class="data-table" style="margin-top:0;">
+                        <tr><td>device</td><td class="mono">0</td></tr>
+                        <tr><td>warmup / iters</td><td class="mono">3 / 10</td></tr>
+                        <tr><td>blocks</td><td class="mono">4</td></tr>
+                        <tr><td>repeats sweep</td><td class="mono">500, 1000, 2500, 5000</td></tr>
+                        <tr><td>size_bytes</td><td class="mono">65536 (64 KB)</td></tr>
+                    </table>
+                </div>
+                <div class="chart-box" style="background:transparent;">
+                    <h3>推导公式</h3>
+                    <table class="data-table" style="margin-top:0;">
+                        <tr><td>MTE 带宽</td><td class="mono">blocks × kTileBytes × 2 / slope = 4×1024×2 / 0.1236μs ≈ 66 GB/s</td></tr>
+                        <tr><td>Vector GFLOPS</td><td class="mono">blocks × lanes × elems / slope = 4×4×256 / 0.1142μs ≈ 36 GFLOPS</td></tr>
+                        <tr><td>Vector ops/cycle</td><td class="mono">lanes / (slope × freq) = 4 / (0.1142μs × 1GHz) ≈ 0.035</td></tr>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -274,8 +309,9 @@
             <div class="analysis-box">
                 <h3>📊 MTE 分析</h3>
                 <p>
-                    <strong>拷贝带宽</strong>: 调整后斜率 <code>0.1236 μs/op</code>，对应 65KB 数据拷贝约 65536/0.1236 ≈ <strong>530 MB/s</strong> per block。
-                    实际带宽 = size_bytes / slope = 65536 / 0.1236 ≈ <strong>8.08 GB/s</strong> (4 blocks)。<br>
+                    <strong>拷贝带宽</strong>: 每次 repeat 执行 GM→UB→GM 双向拷贝，每个 block 拷贝 <code>kTileBytes=1024B</code>×2 = 2048B。
+                    4 个 block 并行，每次 repeat 总搬运量 = 4 × 2048 = 8192B。<br>
+                    带宽 = 8192B / 0.1236μs ≈ <strong>66.3 GB/s</strong> (4 blocks 聚合)。<br>
                     <strong>启动延迟</strong>: 32B 小拷贝的每次操作开销 <code>0.2746 μs</code>，反映了 DataCopy 指令的调度和同步开销。<br>
                     <strong>粒度</strong>: 与拷贝带宽接近，说明 DataCopy 以 32B 为最小粒度对齐。
                 </p>
@@ -342,7 +378,10 @@
                 <h3>📊 Vector 分析</h3>
                 <p>
                     <strong>Add/Mul 延迟</strong>: 依赖链上每次 FP32 Add 或 Mul 约 <code>22~24 ns</code>，这是 RAW (Read-After-Write) 数据冒险导致的流水线停顿。<br>
-                    <strong>吞吐量</strong>: 4-lane 独立 Add 的每次操作 <code>0.114 μs</code>，4 个 lane 并行执行，理论峰值 = 4 / 0.114 ≈ <strong>35 GOPS</strong>。<br>
+                    <strong>吞吐量</strong>: 每次 repeat 发 4 条独立向量 <code>Add</code>，每条 256 FP32 元素，4 个 block 并行。<br>
+                    每次 repeat 总操作数 = 4 blocks × 4 lanes × 256 elems = <strong>4096 FP32 ops</strong>。<br>
+                    GFLOPS = 4096 / 0.1142μs ≈ <strong>35.9 GFLOPS</strong>。<br>
+                    按向量指令计: 4 ops / (0.1142μs × 1000 cycles/μs) ≈ <strong>0.035 ops/cycle</strong> (@1GHz)。<br>
                     <strong>管线深度</strong>: 依赖 Add + 独立 gap ops 的斜率 <code>0.0228 μs</code>，与纯依赖 Add 接近，说明 gap ops 被流水线完全隐藏。<br>
                     <strong>基准校正</strong>: 调整后斜率 (减去 baseline) 比原始斜率小约 30%，说明循环控制和同步开销不可忽略。
                 </p>
