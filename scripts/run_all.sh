@@ -1,81 +1,47 @@
 #!/usr/bin/env bash
-# ============================================================
-#  昇腾 NPU μbench 全量运行脚本
-#  用法: bash scripts/run_all.sh [--quick] [--category scalar|vector|cube|mte|all]
-#
-#  示例:
-#    bash scripts/run_all.sh                    # 运行全部
-#    bash scripts/run_all.sh --quick            # 快速模式
-#    bash scripts/run_all.sh --category cube    # 只跑 Cube
-# ============================================================
-set -e
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_DIR="${ROOT_DIR}/build/bin"
+RESULT_DIR="${ROOT_DIR}/results"
+mkdir -p "${RESULT_DIR}"
 
-echo "============================================================"
-echo "  昇腾 NPU μbench 全量运行"
-echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "============================================================"
+COMMON_ARGS=(
+  --device "${DEVICE_ID:-0}"
+  --warmup "${WARMUP:-5}"
+  --iters "${ITERS:-20}"
+  --blocks "${BLOCKS:-8}"
+  --repeats "${REPEATS:-1000}"
+  --size "${SIZE_BYTES:-1048576}"
+)
 
-# 激活环境（直接 source CANN 确保 LD_LIBRARY_PATH 传递到子进程）
-source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null
-echo "✅ CANN 环境已激活"
+BENCHES=(
+  mte_copy_bw
+  mte_startup_latency
+  mte_granularity
+  vector_add_latency
+  vector_mul_latency
+  vector_throughput
+  vector_pipeline_depth
+  cube_tile_latency
+  cube_throughput
+  cube_scaling
+  scalar_arith_latency
+  scalar_branch_overhead
+)
 
-# 解析参数
-QUICK=""
-CATEGORY="all"
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --quick) QUICK="--quick"; shift ;;
-        --category) CATEGORY="$2"; shift 2 ;;
-        *) shift ;;
-    esac
+for bench in "${BENCHES[@]}"; do
+  exe="${BIN_DIR}/${bench}"
+  if [[ ! -x "${exe}" ]]; then
+    echo "[skip] ${bench}: executable not found at ${exe}" >&2
+    continue
+  fi
+  echo "===== ${bench} ====="
+  "${exe}" "${COMMON_ARGS[@]}" --csv "${RESULT_DIR}/${bench}.csv" \
+    | tee "${RESULT_DIR}/${bench}.txt"
 done
 
-echo ""
-echo "运行模式: category=$CATEGORY, quick=$QUICK"
-echo ""
+"${ROOT_DIR}/scripts/summarize_csv.sh" "${RESULT_DIR}"/*.csv \
+  > "${RESULT_DIR}/summary.csv"
 
-cd "$PROJECT_DIR"
-
-# 运行测试，带超时保护
-TIMEOUT=1800  # 30 分钟超时
-START_TIME=$(date +%s)
-
-python3 run_all.py --category $CATEGORY $QUICK 2>&1 | grep -v -E "UserWarning|SyntaxWarning|warnings.warn|dirpath|\"\"\"" &
-PID=$!
-
-# 轮询监控
-echo "监控进程 PID=$PID，超时=${TIMEOUT}s"
-echo ""
-while kill -0 $PID 2>/dev/null; do
-    CURRENT_TIME=$(date +%s)
-    ELAPSED=$((CURRENT_TIME - START_TIME))
-    if [ $ELAPSED -gt $TIMEOUT ]; then
-        echo ""
-        echo "❌ 超时（${TIMEOUT}s），终止进程..."
-        kill $PID 2>/dev/null
-        exit 1
-    fi
-    sleep 30
-    echo "[$(date +%H:%M:%S)] 运行中... (${ELAPSED}s)"
-done
-
-wait $PID
-EXIT_CODE=$?
-
-END_TIME=$(date +%s)
-ELAPSED=$((END_TIME - START_TIME))
-
-echo ""
-echo "============================================================"
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "  ✅ 运行完成！耗时: ${ELAPSED}s"
-    echo "  结果目录: $PROJECT_DIR/results/"
-    echo ""
-    ls -lh "$PROJECT_DIR/results/"
-else
-    echo "  ❌ 运行失败，退出码: $EXIT_CODE"
-fi
-echo "============================================================"
+echo "Summary written to ${RESULT_DIR}/summary.csv"

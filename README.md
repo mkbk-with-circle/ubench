@@ -1,80 +1,126 @@
-# ubench — 昇腾 310P3 微基准测试（Lab2）
+# Ascend C ubench
 
-并行与分布式计算导论 Lab2：在昇腾 NPU 上测量 DaVinci 微架构参数（S1–S3, V1–V5, C1–C5, M1–M8）。
+This is a clean Ascend C + C++/ACL rewrite of the previous Python/PyTorch
+ubench. The old Python implementation launched PyTorch tensor ops inside the
+measured loop, so it measured framework dispatch and synchronization overhead
+instead of DaVinci AI Core microarchitecture parameters.
 
-## 快速开始
+## Layout
+
+```text
+ubench_ascendc/
+├── common/              # ACL runtime helpers, fitting, CSV output
+├── mte/                 # DataCopy bandwidth, startup latency, granularity
+├── vector/              # Add/mul latency, throughput, pipeline-depth probes
+├── cube/                # Matmul/MMAD tile, throughput, scaling probes
+├── scalar/              # Experimental scalar probes, not ground truth by default
+├── scripts/             # build/run/profile/report scripts
+└── results/             # CSV and text output
+```
+
+Each benchmark follows the CUDA ubench style: a small C++ host runner allocates
+device memory, launches one Ascend C kernel, synchronizes, reads back an
+observable result, and prints CSV-friendly output. The target loop is inside the
+`__global__ __aicore__` kernel.
+
+## Build
+
+Set CANN environment first:
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/mkbk-with-circle/ubench.git
-cd ubench
-
-# 2. 配置环境（每次登录新终端时执行）
-source scripts/setup_env.sh
-
-# 3. 一键运行全部测试 + 生成报告
-bash scripts/run_and_report.sh
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+export ASCEND_CANN_PACKAGE_PATH=/usr/local/Ascend/ascend-toolkit/latest
+export ASCEND_SOC_VERSION=Ascend310P3
+export ASCEND_OPT_LEVEL=O2
 ```
 
-## 目录结构
-
-```
-ubench/
-├── scripts/           # 🔧 运行脚本（从这里开始）
-│   ├── setup_env.sh       # 环境配置
-│   ├── run_all.sh         # 运行测试
-│   ├── generate_report.sh # 生成报告
-│   ├── run_and_report.sh  # 一键运行+报告
-│   └── README.md          # 脚本说明
-├── common/            # 计时与统计工具
-├── scalar/            # S1–S3 标量单元
-├── vector/            # V1–V5 向量单元
-├── cube/              # C1–C5 矩阵乘单元
-├── mte/               # M1–M8 数据搬运单元
-├── results/           # 测量结果输出
-│   ├── all_results.json       # 汇总结果
-│   ├── extracted_params.json  # 关键参数
-│   ├── c5_scaling_chart.png   # C5 折线图
-│   └── dashboard.html         # HTML 仪表板
-├── run_all.py         # Python 入口
-├── report_template.md # 实验报告
-└── setup_env.sh       # 环境恢复脚本
-```
-
-## 运行选项
+Build host runners:
 
 ```bash
-# 运行全部
-bash scripts/run_all.sh
-
-# 快速模式
-bash scripts/run_all.sh --quick
-
-# 只运行特定类别
-bash scripts/run_all.sh --category scalar   # S1-S3
-bash scripts/run_all.sh --category vector   # V1-V5
-bash scripts/run_all.sh --category cube     # C1-C5
-bash scripts/run_all.sh --category mte      # M1-M8
-
-# 生成报告（已有结果时）
-bash scripts/generate_report.sh
+make build
 ```
 
-## 环境要求
-
-- 硬件：昇腾 NPU（310P3 / 910B）
-- 系统：openEuler / CentOS / Ubuntu (aarch64)
-- 软件：CANN 8.x, Python 3.10+
-
-## 查看结果
+Build/link device kernels with the CANN Kernel Launch flow used by the local
+CANN installation:
 
 ```bash
-# 打开 HTML 仪表板
-open results/dashboard.html
-
-# 查看关键参数
-cat results/extracted_params.json
-
-# 查看实验报告
-cat report_template.md
+make kernels
 ```
+
+`common/launch_stubs.cpp` provides weak symbols that intentionally fail at
+runtime if real Ascend C launch stubs are missing. This prevents accidentally
+trusting host-only binaries.
+
+## Run
+
+```bash
+make run
+```
+
+Common environment variables:
+
+```bash
+DEVICE_ID=0 WARMUP=5 ITERS=20 BLOCKS=8 REPEATS=1000 SIZE_BYTES=1048576 make run
+```
+
+Per-benchmark profiling is optional:
+
+```bash
+make profile BENCH=mte_copy_bw
+```
+
+This wraps `msprof op` and stores output below `results/msprof_<bench>/`.
+
+## Measurement Discipline
+
+The project does not rely on undocumented DaVinci inline assembly. Instead it
+uses public Ascend C APIs and validates that the compiler did not invalidate the
+benchmark.
+
+Rules:
+
+- Use `-O2` or `-O3` for performance numbers. Use `-O0` only for debugging.
+- Keep the measured loop on the device side.
+- The measured loop should contain only the target operation whenever possible.
+- Write back only one final output/checksum after the loop.
+- Pair each target kernel with a baseline kernel that preserves loop/control
+  structure while removing the target operation.
+- Sweep repeat counts and fit:
+
+```text
+time(N) = fixed_overhead + N * per_op_cost
+```
+
+The fitted slope is the reported per-operation cost. The intercept captures
+fixed launch, writeback, and synchronization costs. Low R2 means the benchmark is
+not clean enough to trust.
+
+Use `PipeBarrier`, `SetFlag`, and `WaitFlag` only when the benchmark semantics
+require pipeline ordering. Do not add synchronization to a raw throughput test
+unless that synchronization is part of the parameter being measured.
+
+## Current Kernel Coverage
+
+- `mte/copy_bw`: GM to UB to GM copy bandwidth.
+- `mte/startup_latency`: repeated 32B DataCopy startup probe.
+- `mte/granularity`: DataCopy size sweep in 32B units.
+- `vector/add_latency`: RAW dependent FP32 vector add chain.
+- `vector/mul_latency`: RAW dependent FP32 vector multiply chain.
+- `vector/throughput`: independent FP32 vector add lanes.
+- `vector/pipeline_depth`: dependent vector add plus independent gap ops.
+- `cube/*`: Matmul/MMAD template based on Ascend C `lib/matmul_intf.h`.
+- `scalar/*`: experimental scalar probes; treat as non-ground-truth until
+  verified against compiler output and profiling.
+
+## Outputs
+
+Each benchmark prints and writes:
+
+- raw total time
+- baseline time
+- adjusted time
+- raw fitted slope/intercept/R2
+- baseline-adjusted fitted slope/intercept/R2
+- output checksum
+
+`scripts/summarize_csv.sh` creates `results/summary.csv` from individual CSVs.
