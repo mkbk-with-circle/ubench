@@ -50,21 +50,30 @@ class TransferStartupOverheadBench(AscendBenchmark):
         """
         Execute a single DMA-like transfer (tensor copy).
         Returns time in milliseconds.
-        Using small transfer sizes to expose startup overhead.
+        Uses single-copy measurement (no batching) to expose per-transfer overhead.
         """
-        timer = EventTimer()
-
         if HAS_NPU:
             src = torch.randn(num_elements, device="npu")
             dst = torch.zeros(num_elements, device="npu")
 
-            timer.record_start()
-            dst.copy_(src)  # This triggers MTE for data movement
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            # Warmup
+            for _ in range(10):
+                dst.copy_(src)
+            torch.npu.synchronize()
+
+            # Single-copy measurement (no batching for latency measurement)
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+
+            start_e.record()
+            dst.copy_(src)
+            end_e.record()
+            torch.npu.synchronize()
+            elapsed = start_e.elapsed_time(end_e)
         else:
             src = np.random.randn(num_elements).astype(np.float32)
             dst = np.zeros(num_elements, dtype=np.float32)
+            timer = EventTimer()
             timer.record_start()
             np.copyto(dst, src)
             timer.record_end()

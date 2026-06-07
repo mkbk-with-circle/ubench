@@ -46,51 +46,44 @@ class HBMMemLatencyBench(AscendBenchmark):
 
     def bench_kernel(self, array_size=1024 * 1024, num_accesses=1000) -> float:
         """
-        Execute random access into a large (HBM-resident) array.
-        Returns time in milliseconds.
+        Measure single copy latency (sequential access) into HBM-resident array.
+        Returns time in milliseconds for a single copy.
         """
-        timer = EventTimer()
-
         if HAS_NPU:
-            # Large array that won't fit in L1 (1MB L1 vs 16MB+ array)
             data = torch.randn(array_size, device="npu")
-            # Random access indices
-            indices = np.random.randint(0, array_size, size=num_accesses)
-            indices_t = torch.tensor(indices, dtype=torch.long, device="npu")
+            dst = torch.zeros(array_size, device="npu")
 
-            timer.record_start()
-            # Pointer chasing via dependent indexed loads
-            acc = torch.tensor([0.0], device="npu")
-            pos = torch.tensor([0], dtype=torch.long, device="npu")
-            for i in range(num_accesses - 1):
-                idx = indices_t[pos.long()]
-                acc = acc + data[idx.long()]
-                pos = torch.tensor([indices[i + 1]], dtype=torch.long, device="npu")
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            # Warmup
+            for _ in range(10):
+                dst.copy_(data)
+            torch.npu.synchronize()
+
+            # Measure single-copy latency (no batching for true latency)
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+
+            start_e.record()
+            dst.copy_(data)
+            end_e.record()
+            torch.npu.synchronize()
+            elapsed = start_e.elapsed_time(end_e)
         else:
             data = np.random.randn(array_size).astype(np.float32)
-            indices = np.random.randint(0, array_size, size=num_accesses)
-
-            timer.record_start()
-            acc = 0.0
-            for i in range(num_accesses - 1):
-                acc += data[indices[i]]
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            dst = np.zeros(array_size, dtype=np.float32)
+            import time
+            t0 = time.perf_counter()
+            np.copyto(dst, data)
+            elapsed = (time.perf_counter() - t0) * 1000.0
 
         return elapsed
 
     def measure_latency(self, array_sizes=None, num_warmup=3, num_iters=20):
         """Measure HBM latency at various array sizes."""
         if array_sizes is None:
-            # From 256KB to 128MB (spanning L1 to HBM)
             array_sizes = [
-                64 * 1024,      # 256 KB (fits in L1)
-                256 * 1024,     # 1 MB (L1 boundary)
-                1024 * 1024,    # 4 MB (exceeds L1)
-                4 * 1024 * 1024, # 16 MB (definitely HBM)
-                16 * 1024 * 1024, # 64 MB (HBM)
+                1024 * 1024,     # 4 MB
+                4 * 1024 * 1024,  # 16 MB
+                16 * 1024 * 1024, # 64 MB
             ]
 
         freq_mhz = estimate_clock_freq_mhz()
@@ -103,11 +96,11 @@ class HBMMemLatencyBench(AscendBenchmark):
                 bench_kwargs={"array_size": size, "num_accesses": 500},
             )
 
-            cycles_total = ms_to_cycles(res.value, freq_mhz)
-            cycles_per_access = cycles_total / 500
+            # Convert to cycles: ms * MHz * 1000 = cycles
+            cycles = res.value * freq_mhz * 1000
 
             res.unit = "cycles"
-            res.value = cycles_per_access
+            res.value = cycles
             size_mb = size * 4 / (1024 * 1024)
             res.notes = f"array_size={size} ({size_mb:.1f}MB), freq={freq_mhz}MHz"
             results.append(res)

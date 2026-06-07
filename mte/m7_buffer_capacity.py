@@ -49,43 +49,70 @@ class BufferCapacityBench(AscendBenchmark):
             device_id=device_id,
         )
 
+    def _get_batch_size(self, num_elements):
+        """Return optimal batch size for given element count."""
+        size_kb = num_elements * 4 // 1024
+        if size_kb <= 1024: return 200
+        if size_kb <= 4096: return 100
+        if size_kb <= 8192: return 50
+        if size_kb <= 16384: return 20
+        if size_kb <= 32768: return 10
+        return 4
+
     def bench_l1_capacity(self, num_elements=1024 * 256) -> float:
         """
         Measure L1 buffer access performance at given data size.
         Returns bandwidth in GB/s (lower = capacity exceeded).
+        Uses batched measurement for accurate timing.
         """
-        timer = EventTimer()
-        element_size = 4
-        total_bytes = num_elements * element_size
+        batch_size = self._get_batch_size(num_elements)
 
         if HAS_NPU:
             src = torch.randn(num_elements, device="npu")
             dst = torch.zeros(num_elements, device="npu")
 
-            timer.record_start()
-            dst.copy_(src)
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            # Warmup
+            for _ in range(20):
+                dst.copy_(src)
+            torch.npu.synchronize()
+
+            # Batched measurement
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+
+            start_e.record()
+            for _ in range(batch_size):
+                dst.copy_(src)
+            end_e.record()
+            torch.npu.synchronize()
+            elapsed = start_e.elapsed_time(end_e) / batch_size
         else:
             src = np.random.randn(num_elements).astype(np.float32)
             dst = np.zeros(num_elements, dtype=np.float32)
+            timer = EventTimer()
             timer.record_start()
             np.copyto(dst, src)
             timer.record_end()
             elapsed = timer.elapsed_ms()
 
+        element_size = 4
+        total_bytes = num_elements * element_size
         bw = compute_bandwidth_gbs(total_bytes, elapsed)
         return bw
 
     def measure_l1_capacity(self, element_counts=None,
-                            num_warmup=5, num_iters=20):
-        """Sweep data sizes to find L1 capacity cliff."""
+                            num_warmup=5, num_iters=30):
+        """Sweep data sizes to find capacity cliff."""
         if element_counts is None:
-            # Fine-grained sweep around expected L1 size (1 MB = 256K FP32)
+            # Fine-grained sweep from 16KB to 32MB
             element_counts = [
                 4 * 1024, 8 * 1024, 16 * 1024, 32 * 1024,
-                64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024,
-                1024 * 1024, 2 * 1024 * 1024, 4 * 1024 * 1024,
+                64 * 1024, 128 * 1024, 256 * 1024, 384 * 1024,
+                512 * 1024, 768 * 1024, 1024 * 1024,
+                1536 * 1024, 2 * 1024 * 1024, 3 * 1024 * 1024,
+                4 * 1024 * 1024, 6 * 1024 * 1024, 8 * 1024 * 1024,
+                12 * 1024 * 1024, 16 * 1024 * 1024, 24 * 1024 * 1024,
+                32 * 1024 * 1024,
             ]
 
         results = []
@@ -102,7 +129,7 @@ class BufferCapacityBench(AscendBenchmark):
 
             res = BenchResult(
                 param_id="M7_L1",
-                param_name=f"L1容量探测 (size={size_kb:.0f}KB)",
+                param_name=f"容量探测 (size={size_kb:.0f}KB)",
                 category="MTE",
                 value=mean_bw,
                 unit="GB/s",
@@ -114,7 +141,7 @@ class BufferCapacityBench(AscendBenchmark):
                 median=float(np.median(arr)),
                 p25=float(np.percentile(arr, 25)),
                 p75=float(np.percentile(arr, 75)),
-                notes=f"L1 probe: {count} elements, {size_kb:.0f} KB",
+                notes=f"Probe: {count} elements, {size_kb:.0f} KB, batch={self._get_batch_size(count)}",
             )
             results.append(res)
             print_result(res)

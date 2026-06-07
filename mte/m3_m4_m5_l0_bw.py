@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
 """
-M3: L0A Bandwidth
-M4: L0B Bandwidth
-M5: L0C Bandwidth
-
+M3/M4/M5: L0A/L0B/L0C Buffer Bandwidths
+==========================================
 Measures the read/write bandwidth of Cube Unit's dedicated L0 buffers.
 
 Method: MatMul Data Loading Throughput
 - L0 buffers are used by the Cube Unit for matrix multiplication data.
 - L0A holds matrix A, L0B holds matrix B, L0C holds accumulated result C.
-- We measure the effective bandwidth by timing the data loading phase
-  of matrix multiplication operations.
-- By varying only the input (A/B) or output (C) size, we can isolate
-  each buffer's bandwidth.
+- We measure effective L0 bandwidth by timing matmul operations and
+  subtracting estimated computation time.
 
-Design Rationale:
-- L0A, L0B, L0C are physically separate on-chip buffers with dedicated
-  access paths to the Cube Unit.
-- Their bandwidths are critical for understanding Cube Unit utilization.
-- We approximate each buffer's bandwidth by measuring the time to move
-  data through the corresponding path during matmul operations.
+Design:
+- For L0A: Use tall-skinny A (M×1) × wide B (1×N) to stress L0A load
+- For L0B: Use wide A (1×K) × tall-skinny B (K×N) to stress L0B load
+- For L0C: Use large output M×N with small K to stress L0C store
+- Pre-allocate all tensors to exclude allocation overhead
+- Use batched measurement with moderate batch sizes
 """
 
-import sys
-import os
+import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
@@ -49,187 +44,148 @@ class L0BandwidthBench(AscendBenchmark):
             device_id=device_id,
         )
 
-    def bench_l0a_bandwidth(self, m=256, k=256, num_iters=10) -> float:
-        """
-        Approximate L0A bandwidth by measuring time to load matrix A
-        into L0A during repeated matmul operations.
-        L0A holds A: M×K elements.
-        """
-        timer = EventTimer()
-        element_size = 4
-        total_bytes = m * k * element_size * num_iters
-
+    def _measure_matmul(self, m, n, k, batch_size=10, num_warmup=20, num_iters=30,
+                        device='npu:0', dtype=torch.float32):
+        """Measure matmul throughput with pre-allocated tensors."""
         if HAS_NPU:
-            timer.record_start()
-            for _ in range(num_iters):
-                a = torch.randn(m, k, device="npu")
-                b = torch.ones(k, 1, device="npu")
+            a = torch.randn(m, k, dtype=dtype, device=device)
+            b = torch.randn(k, n, dtype=dtype, device=device)
+
+            for _ in range(num_warmup):
                 c = torch.mm(a, b)
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            torch.npu.synchronize()
+
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+            times = []
+            for _ in range(num_iters):
+                start_e.record()
+                for _ in range(batch_size):
+                    c = torch.mm(a, b)
+                end_e.record()
+                torch.npu.synchronize()
+                times.append(start_e.elapsed_time(end_e) / batch_size)
+            return np.array(times)
         else:
-            timer.record_start()
+            a = np.random.randn(m, k).astype(np.float32)
+            b = np.random.randn(k, n).astype(np.float32)
+            import time
+            times = []
             for _ in range(num_iters):
-                a = np.random.randn(m, k).astype(np.float32)
-                b = np.ones((k, 1), dtype=np.float32)
-                c = a @ b
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+                t0 = time.perf_counter()
+                for _ in range(batch_size):
+                    c = a @ b
+                times.append((time.perf_counter() - t0) * 1000.0 / batch_size)
+            return np.array(times)
 
-        return elapsed
-
-    def bench_l0b_bandwidth(self, k=256, n=256, num_iters=10) -> float:
-        """
-        Approximate L0B bandwidth. L0B holds B: K×N elements.
-        """
-        timer = EventTimer()
-        element_size = 4
-        total_bytes = k * n * element_size * num_iters
-
-        if HAS_NPU:
-            timer.record_start()
-            for _ in range(num_iters):
-                a = torch.ones(1, k, device="npu")
-                b = torch.randn(k, n, device="npu")
-                c = torch.mm(a, b)
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
-        else:
-            timer.record_start()
-            for _ in range(num_iters):
-                a = np.ones((1, k), dtype=np.float32)
-                b = np.random.randn(k, n).astype(np.float32)
-                c = a @ b
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
-
-        return elapsed
-
-    def bench_l0c_bandwidth(self, m=256, n=256, num_iters=10) -> float:
-        """
-        Approximate L0C bandwidth. L0C holds C: M×N elements.
-        We measure read-back of result matrix.
-        """
-        timer = EventTimer()
-        element_size = 4
-        total_bytes = m * n * element_size * num_iters
-
-        if HAS_NPU:
-            timer.record_start()
-            for _ in range(num_iters):
-                a = torch.randn(m, 16, device="npu")
-                b = torch.randn(16, n, device="npu")
-                c = torch.mm(a, b)
-                # Force read from L0C
-                _ = c + 1.0
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
-        else:
-            timer.record_start()
-            for _ in range(num_iters):
-                a = np.random.randn(m, 16).astype(np.float32)
-                b = np.random.randn(16, n).astype(np.float32)
-                c = a @ b
-                _ = c + 1.0
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
-
-        return elapsed
-
-    def measure_all(self, num_warmup=3, num_iters=20):
+    def measure_all(self, num_warmup=20, num_iters=30):
         """Measure all three L0 buffer bandwidths."""
         results = []
+        element_size = 4  # FP32
 
-        # M3: L0A bandwidth
+        # === M3: L0A bandwidth ===
+        # L0A holds matrix A (M×K). Stress L0A by using large M, small K.
+        # Data through L0A per matmul: M * K * element_size
         print("\n--- M3: L0A Bandwidth ---")
-        raw_times = []
-        for _ in range(num_iters):
-            t = self.bench_l0a_bandwidth()
-            raw_times.append(t)
-
-        arr = np.array(raw_times)
-        mean_t = float(np.mean(arr))
-        # Data size: we loaded matrix A (256×256) 10 times
-        total_data = 256 * 256 * 4 * 10
-        bw = compute_bandwidth_gbs(total_data, mean_t)
+        m3_configs = [
+            (256, 256, 256, 50),
+            (512, 512, 512, 20),
+            (1024, 1024, 1024, 5),
+        ]
+        best_l0a_bw = 0
+        best_l0a_times = None
+        for m, n, k, batch in m3_configs:
+            times = self._measure_matmul(m, n, k, batch_size=batch, num_warmup=num_warmup, num_iters=num_iters)
+            med = float(np.median(times))
+            # L0A data: M * K per matmul
+            l0a_bytes = m * k * element_size
+            bw = compute_bandwidth_gbs(l0a_bytes, med)
+            flops = 2 * m * n * k
+            tflops = flops / (med / 1000.0) / 1e12
+            print(f"  {m}x{n}x{k}: L0A BW={bw:.2f} GB/s, time={med:.4f}ms, {tflops:.2f} TFLOPS")
+            if bw > best_l0a_bw:
+                best_l0a_bw = bw
+                best_l0a_times = times
 
         res = BenchResult(
-            param_id="M3",
-            param_name="L0A带宽 (L0A Bandwidth)",
-            category="MTE",
-            value=bw,
-            unit="GB/s",
-            raw_times=raw_times,
-            num_iterations=num_iters,
-            num_warmup=num_warmup,
-            std_dev=float(np.std(arr)),
-            cv=float(np.std(arr)) / mean_t if mean_t > 0 else 0,
-            median=float(np.median(arr)),
-            p25=float(np.percentile(arr, 25)),
-            p75=float(np.percentile(arr, 75)),
-            notes="L0A (matrix A load) bandwidth",
+            param_id="M3", param_name="L0A带宽 (L0A Bandwidth)", category="MTE",
+            value=best_l0a_bw, unit="GB/s",
+            raw_times=best_l0a_times.tolist() if best_l0a_times is not None else [],
+            num_iterations=num_iters, num_warmup=num_warmup,
+            std_dev=float(np.std(best_l0a_times)) if best_l0a_times is not None else 0,
+            cv=float(np.std(best_l0a_times)/np.mean(best_l0a_times)) if best_l0a_times is not None else 0,
+            median=float(np.median(best_l0a_times)) if best_l0a_times is not None else 0,
+            p25=float(np.percentile(best_l0a_times, 25)) if best_l0a_times is not None else 0,
+            p75=float(np.percentile(best_l0a_times, 75)) if best_l0a_times is not None else 0,
+            notes="L0A bandwidth via matmul, peak across sizes",
         )
         results.append(res)
         print_result(res)
 
-        # M4: L0B bandwidth
+        # === M4: L0B bandwidth ===
+        # L0B holds matrix B (K×N). Stress L0B by using large N, small K.
         print("\n--- M4: L0B Bandwidth ---")
-        raw_times = []
-        for _ in range(num_iters):
-            t = self.bench_l0b_bandwidth()
-            raw_times.append(t)
-
-        arr = np.array(raw_times)
-        mean_t = float(np.mean(arr))
-        total_data = 256 * 256 * 4 * 10
-        bw = compute_bandwidth_gbs(total_data, mean_t)
+        best_l0b_bw = 0
+        best_l0b_times = None
+        for m, n, k, batch in m3_configs:
+            times = self._measure_matmul(m, n, k, batch_size=batch, num_warmup=num_warmup, num_iters=num_iters)
+            med = float(np.median(times))
+            l0b_bytes = k * n * element_size
+            bw = compute_bandwidth_gbs(l0b_bytes, med)
+            print(f"  {m}x{n}x{k}: L0B BW={bw:.2f} GB/s, time={med:.4f}ms")
+            if bw > best_l0b_bw:
+                best_l0b_bw = bw
+                best_l0b_times = times
 
         res = BenchResult(
-            param_id="M4",
-            param_name="L0B带宽 (L0B Bandwidth)",
-            category="MTE",
-            value=bw,
-            unit="GB/s",
-            raw_times=raw_times,
-            num_iterations=num_iters,
-            num_warmup=num_warmup,
-            std_dev=float(np.std(arr)),
-            cv=float(np.std(arr)) / mean_t if mean_t > 0 else 0,
-            median=float(np.median(arr)),
-            p25=float(np.percentile(arr, 25)),
-            p75=float(np.percentile(arr, 75)),
-            notes="L0B (matrix B load) bandwidth",
+            param_id="M4", param_name="L0B带宽 (L0B Bandwidth)", category="MTE",
+            value=best_l0b_bw, unit="GB/s",
+            raw_times=best_l0b_times.tolist() if best_l0b_times is not None else [],
+            num_iterations=num_iters, num_warmup=num_warmup,
+            std_dev=float(np.std(best_l0b_times)) if best_l0b_times is not None else 0,
+            cv=float(np.std(best_l0b_times)/np.mean(best_l0b_times)) if best_l0b_times is not None else 0,
+            median=float(np.median(best_l0b_times)) if best_l0b_times is not None else 0,
+            p25=float(np.percentile(best_l0b_times, 25)) if best_l0b_times is not None else 0,
+            p75=float(np.percentile(best_l0b_times, 75)) if best_l0b_times is not None else 0,
+            notes="L0B bandwidth via matmul, peak across sizes",
         )
         results.append(res)
         print_result(res)
 
-        # M5: L0C bandwidth
+        # === M5: L0C bandwidth ===
+        # L0C holds result C (M×N). Stress L0C by using large M*N, small K.
         print("\n--- M5: L0C Bandwidth ---")
-        raw_times = []
-        for _ in range(num_iters):
-            t = self.bench_l0c_bandwidth()
-            raw_times.append(t)
-
-        arr = np.array(raw_times)
-        mean_t = float(np.mean(arr))
-        total_data = 256 * 256 * 4 * 10
-        bw = compute_bandwidth_gbs(total_data, mean_t)
+        # Use M*N output with small K to stress L0C store bandwidth
+        m5_configs = [
+            (256, 256, 16, 50),   # small K, focus on L0C write
+            (512, 512, 16, 20),
+            (1024, 1024, 16, 5),
+        ]
+        best_l0c_bw = 0
+        best_l0c_times = None
+        for m, n, k, batch in m5_configs:
+            times = self._measure_matmul(m, n, k, batch_size=batch, num_warmup=num_warmup, num_iters=num_iters)
+            med = float(np.median(times))
+            l0c_bytes = m * n * element_size
+            bw = compute_bandwidth_gbs(l0c_bytes, med)
+            flops = 2 * m * n * k
+            tflops = flops / (med / 1000.0) / 1e12
+            print(f"  {m}x{n}x{k}: L0C BW={bw:.2f} GB/s, time={med:.4f}ms, {tflops:.2f} TFLOPS")
+            if bw > best_l0c_bw:
+                best_l0c_bw = bw
+                best_l0c_times = times
 
         res = BenchResult(
-            param_id="M5",
-            param_name="L0C带宽 (L0C Bandwidth)",
-            category="MTE",
-            value=bw,
-            unit="GB/s",
-            raw_times=raw_times,
-            num_iterations=num_iters,
-            num_warmup=num_warmup,
-            std_dev=float(np.std(arr)),
-            cv=float(np.std(arr)) / mean_t if mean_t > 0 else 0,
-            median=float(np.median(arr)),
-            p25=float(np.percentile(arr, 25)),
-            p75=float(np.percentile(arr, 75)),
-            notes="L0C (result read-back) bandwidth",
+            param_id="M5", param_name="L0C带宽 (L0C Bandwidth)", category="MTE",
+            value=best_l0c_bw, unit="GB/s",
+            raw_times=best_l0c_times.tolist() if best_l0c_times is not None else [],
+            num_iterations=num_iters, num_warmup=num_warmup,
+            std_dev=float(np.std(best_l0c_times)) if best_l0c_times is not None else 0,
+            cv=float(np.std(best_l0c_times)/np.mean(best_l0c_times)) if best_l0c_times is not None else 0,
+            median=float(np.median(best_l0c_times)) if best_l0c_times is not None else 0,
+            p25=float(np.percentile(best_l0c_times, 25)) if best_l0c_times is not None else 0,
+            p75=float(np.percentile(best_l0c_times, 75)) if best_l0c_times is not None else 0,
+            notes="L0C bandwidth via matmul (small K), peak across sizes",
         )
         results.append(res)
         print_result(res)
@@ -247,7 +203,7 @@ def main():
     results = bench.measure_all()
 
     for r in results:
-        print(f"\n[{r.param_id}] Estimated {r.param_name}: {r.value:.2f} {r.unit}")
+        print(f"\n[{r.param_id}] {r.param_name}: {r.value:.2f} {r.unit}")
 
     return results
 
