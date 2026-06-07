@@ -15,25 +15,54 @@
 | Vector | pipeline_depth | ✅ 通过 | 0.0228 | 0.0338 | 0.99983 |
 | Scalar | arith_latency | ✅ 通过 | 0.0011 | 0.0055 | 0.93214 |
 | Scalar | branch_overhead | ✅ 通过 | 0.0107 | 0.0106 | 0.99925 |
-| Cube | tile_latency | ❌ 超时 | — | — | — |
-| Cube | throughput | ❌ 超时 | — | — | — |
-| Cube | scaling | ❌ 超时 | — | — | — |
+| Cube | tile_latency | ⏭ 跳过 | — | — | — |
+| Cube | throughput | ⏭ 跳过 | — | — | — |
+| Cube | scaling | ⏭ 跳过 | — | — | — |
 
-**9/12 基准测试通过**，覆盖 MTE、Vector、Scalar 三大类微架构参数。
+**9/12 基准测试通过**，覆盖 MTE、Vector、Scalar 三大类微架构参数。Cube 在 310P 上因 `Matmul` 模板兼容性问题挂起，已跳过。
 
-### 推导指标
+---
 
-根据 kernel 源码中的参数 (`kElems=256`, `kLanes=4`, `kTileBytes=1024`, `blocks=4`) 推导：
+## 报告用派生指标
 
-| 指标 | 公式 | 结果 |
-|------|------|------|
-| MTE 拷贝带宽 | `blocks × kTileBytes × 2 / slope` = 4×1024×2 / 0.1236μs | **~66 GB/s** |
-| Vector FP32 吞吐 | `blocks × lanes × elems / slope` = 4×4×256 / 0.1142μs | **~36 GFLOPS** |
-| Vector ops/cycle | `lanes / (slope × freq)` = 4 / (0.1142μs × 1GHz) | **~0.035 ops/cycle** |
+> 以下派生值基于 kernel 源码常量推导，斜率本身可信（R² 均 >0.99，scalar_arith 除外）。
 
-> 注: MTE 每次 repeat 执行 GM→UB→GM 双向拷贝 (1024B×2 per block)，4 blocks 并行。
-> Vector 每次 repeat 发 4 条独立 256-element 向量 Add，4 blocks 并行。
-> ops/cycle 按 1GHz 估算；参考量级 (910B) ~1 ops/cycle，当前 ~0.035 说明未打满峰值，符合 micro-kernel 特征 (带 DataCopy/PipeBarrier、非满占流水线)。
+| 参数 | 调整后斜率 | 派生值 | 说明 |
+|------|-----------|--------|------|
+| MTE copy (M1) | 0.1236 μs/op | **~66 GB/s** | GM↔UB 1024B×2×4 blocks；每 repeat 搬运 8192B |
+| MTE startup (M8) | 0.2746 μs/op | **275 ns** | 32B 完整 DataCopy 往返，非纯 DMA 启动开销 |
+| MTE granularity | 0.1454 μs/op | **145 ns** | mode=0 最小 32B 粒度，非 Lab2 M7 容量曲线 |
+| V3 throughput | 0.1142 μs/op | **~36 GFLOPS** | 4 blocks×4 lanes×256 FP32 Add = 4096 ops/repeat |
+| V3 ops/cycle | — | **~0.035** | 4 blocks×4 lanes / (0.1142μs×1GHz) @1GHz |
+| V1 add_latency | 0.0224 μs/op | **22.4 ns** | 含 PipeBarrier，310P 参考值 |
+| V2 mul_latency | 0.0236 μs/op | **23.6 ns** | 含 PipeBarrier，310P 参考值 |
+| V4 pipeline_depth | 0.0228 μs/op | **22.8 ns** | gap ops 被管线隐藏，与 V1 接近 |
+| S1 arith_latency | 0.0011 μs/op | **1.14 ns** | ⚠ **不采用**: R²=0.932<0.95，baseline 与 target 成本接近 |
+| S2 branch_overhead | 0.0107 μs/op | **10.7 ns** | 分支探针，R²=0.999 可信；非 S3 访存延迟 |
+| Cube (3 项) | — | **N/A** | 310P Matmul 模板挂起，已跳过；待 910B 验证 |
+
+### 派生公式
+
+```
+MTE 带宽  = blocks × kTileBytes × 2 / slope_us
+          = 4 × 1024 × 2 / 0.1236μs ≈ 66 GB/s
+
+Vector GFLOPS = blocks × lanes × elems / slope_us / 1e9
+              = 4 × 4 × 256 / 0.1142μs / 1e9 ≈ 36 GFLOPS
+
+Vector ops/cycle = blocks × lanes / (slope_us × freq_MHz)
+                 = 4 × 4 / (0.1142μs × 1000) ≈ 0.035 @1GHz
+```
+
+### 310P 免责声明
+
+- 本结果 **不能** 与 Lab2 910B 助教标定值直接对比（不同硬件、不同 CANN 版本）
+- Lab 参数映射为**近似**：
+  - M1 实为 GM↔UB 带宽探针，非纯 L2→L1
+  - M8 实为 DataCopy 启动+往返延迟，非纯 DMA 启动开销
+  - S1 标量算术 R²<0.95，标记为不可靠/实验性，不作为正式 KPI
+- `scalar_arith_latency` 中 repeat=500 时 adjusted 为负值（-0.58μs），说明 baseline 开销已超过 target，该点无效
+- Cube 在 310P 上不可用，需在 910B 上重新测量
 
 ---
 
@@ -64,18 +93,22 @@ acc.SetValue(0, static_cast<float>(i));
 { union { uint32_t u; float f; } c; c.u = i; acc.SetValue(0, c.f); }
 ```
 
+> **注意**: 以上修改仅影响 baseline 分支中的可观测占位操作（`if ((i & 0x7ffu) == 0)` 分支），不改变 target kernel 的 `Process()` 运算逻辑。
+
 ### 3. 环境配置脚本
 
 - `setup_env.sh`: 一键环境配置
 - `scripts/build_one_click.sh`: 一键构建（包含所有修补步骤）
+- `scripts/run_all.sh`: 支持 `SKIP_CUBE=1` 自动跳过 Cube 基准
 
 ### 4. 可视化
 
-- `results/html/index.html`: 使用 Chart.js 的交互式可视化页面
-  - 每个类别的 time(N) 线性拟合图
-  - 原始斜率 vs 调整后斜率对比
-  - 拟合质量 R² 对比
-  - 综合参数对比（对数刻度）
+- `results/html/index.html`: 完全离线单文件交互式页面
+  - `EMBEDDED_DATA` JSON 块内嵌所有数据和 kernel 常量
+  - `deriveMetric` 从 kernel 常量推导派生指标，不使用 `size_bytes`
+  - scalar_arith_latency 低可信度警告
+  - Cube 显示「310P 不支持 / 已跳过」
+- `results/html/build_data.py`: 从 CSV 重新生成 EMBEDDED_DATA
 
 ---
 
@@ -108,41 +141,17 @@ acc.SetValue(0, static_cast<float>(i));
 
 #### 2. 调度器初始化问题
 
-即使通过 `Init()` 方法传入正确的 `TCubeTiling` 参数：
-```cpp
-TCubeTiling tiling;
-tiling.usedCoreNum = 1;
-tiling.M = 16; tiling.N = 16; tiling.Ka = 16;
-// ... 其他字段
-mm_.Init(&tiling);
-```
-调度器 (`MATMUL_MODULE(Scheduler)`) 仍无法正常初始化，`Iterate()` 方法返回后进入死循环。
+即使通过 `Init()` 方法传入正确的 `TCubeTiling` 参数，调度器仍无法正常初始化。
 
 #### 3. 底层 API 也受影响
 
-直接使用 `MmadImpl()` 函数（最底层 Cube 单元 API）也会挂起：
-```cpp
-MmadParams params;
-params.m = 16; params.n = 16; params.k = 16;
-MmadImpl(c, a, b, params);  // 挂起
-```
-说明问题不在 `Matmul` 模板封装层，而是与 310P3 的 Cube 单元驱动交互有关。
+直接使用 `MmadImpl()` 函数（最底层 Cube 单元 API）也会挂起，说明问题在 Cube 单元的驱动层面。
 
-### 已尝试的修复
+### 处理方式
 
-| 方案 | 结果 |
-|------|------|
-| 添加 `TCubeTiling` 初始化 | ❌ 仍挂起 |
-| 调整矩阵维度 (16×16×16) | ❌ 仍挂起 |
-| 使用 `MmadImpl` 替代 `Matmul` 模板 | ❌ 仍挂起 |
-| 使用不同的 `QuePosition` | ❌ 仍挂起 |
-| 尝试不同 NPU 设备 (device 0~3) | ❌ 均挂起 |
-
-### 建议解决方案
-
-1. **升级 CANN 版本**: 当前 8.2.RC1 可能对 310P3 的 Cube 单元支持不完善，后续版本可能修复
-2. **使用 ACT 库**: Ascend Computing Template 库 (`ascendc/act/`) 提供了更高级的 `DeviceMatmul` API，自动处理 tiling 和调度
-3. **联系华为技术支持**: 确认 310P3 上 `Matmul` 模板的正确使用方式，以及 `DataCacheCleanAndInvalid` 对地址 0 的行为
+- 在 310P 上自动跳过 Cube 基准（`SKIP_CUBE=1`）
+- 不修改任何 Cube 内核源码
+- 待 910B 环境重新测量
 
 ---
 
@@ -153,7 +162,8 @@ MmadImpl(c, a, b, params);  // 挂起
 | `<benchmark>.txt` | 基准测试的 stdout 输出（人类可读） |
 | `<benchmark>.csv` | 原始 repeat sweep 数据 + 拟合斜率/截距/R² |
 | `summary.csv` | 每个基准测试一行汇总 |
-| `html/index.html` | 交互式可视化页面 (Chart.js) |
+| `html/index.html` | 交互式可视化页面 (Chart.js)，完全离线单文件 |
+| `html/build_data.py` | 从 CSV 生成 EMBEDDED_DATA JSON，`--embed` 写回 HTML |
 | `msprof_<benchmark>/` | 可选的 msprof 性能分析输出 |
 
 ## 测试参数
