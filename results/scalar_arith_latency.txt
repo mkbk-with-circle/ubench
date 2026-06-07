@@ -1,0 +1,10 @@
+benchmark=scalar_arith_latency
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,25.686,26.267,-0.581
+1000,27.014,26.764,0.250
+2500,36.865,36.229,0.636
+5000,49.705,44.939,4.766
+raw_slope_us=0.005484699 raw_intercept_us=22.477179080 raw_r2=0.995646327
+adjusted_slope_us=0.001140417 adjusted_intercept_us=-1.298114014 adjusted_r2=0.932142058
+output_checksum=726812428606308352

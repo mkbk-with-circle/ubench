@@ -1,0 +1,10 @@
+benchmark=vector_pipeline_depth
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,29.973,22.698,7.275
+1000,46.067,25.892,20.175
+2500,96.106,42.529,53.576
+5000,181.879,71.254,110.625
+raw_slope_us=0.033808734 raw_intercept_us=12.436669797 raw_r2=0.999905888
+adjusted_slope_us=0.022829550 adjusted_intercept_us=-3.453642055 adjusted_r2=0.999825222
+output_checksum=17776002798451972416

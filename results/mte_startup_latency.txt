@@ -1,0 +1,10 @@
+benchmark=mte_startup_latency
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,156.507,31.147,125.360
+1000,295.143,25.557,269.586
+2500,720.943,42.391,678.551
+5000,1435.754,71.732,1364.022
+raw_slope_us=0.284550477 raw_intercept_us=11.848001908 raw_r2=0.999986091
+adjusted_slope_us=0.274639636 adjusted_intercept_us=-8.559630227 adjusted_r2=0.999973491
+output_checksum=17862560695593483320

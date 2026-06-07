@@ -1,0 +1,5 @@
+benchmark,device,blocks,size_bytes,repeat,total_us,baseline_us,adjusted_us,raw_slope_us,raw_intercept_us,raw_r2,adjusted_slope_us,adjusted_intercept_us,adjusted_r2
+vector_pipeline_depth,0,4,65536,500,29.9732,22.6981,7.2751,0.0338087,12.4367,0.999906,0.0228295,-3.45364,0.999825
+vector_pipeline_depth,0,4,65536,1000,46.0673,25.8922,20.1751,0.0338087,12.4367,0.999906,0.0228295,-3.45364,0.999825
+vector_pipeline_depth,0,4,65536,2500,96.1056,42.5292,53.5764,0.0338087,12.4367,0.999906,0.0228295,-3.45364,0.999825
+vector_pipeline_depth,0,4,65536,5000,181.879,71.2544,110.625,0.0338087,12.4367,0.999906,0.0228295,-3.45364,0.999825

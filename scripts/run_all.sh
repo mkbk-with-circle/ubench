@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN_DIR="${ROOT_DIR}/build/bin"
+BIN_DIR="${ROOT_DIR}/build_full/bin"
 RESULT_DIR="${ROOT_DIR}/results"
 mkdir -p "${RESULT_DIR}"
 

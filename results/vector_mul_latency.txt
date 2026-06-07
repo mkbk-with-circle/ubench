@@ -1,0 +1,10 @@
+benchmark=vector_mul_latency
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,37.454,28.046,9.408
+1000,49.155,30.378,18.777
+2500,98.690,41.038,57.651
+5000,181.758,67.130,114.628
+raw_slope_us=0.032450475 raw_intercept_us=18.750781001 raw_r2=0.999046795
+adjusted_slope_us=0.023649289 adjusted_intercept_us=-3.094798061 adjusted_r2=0.999048151
+output_checksum=12157274374521244744

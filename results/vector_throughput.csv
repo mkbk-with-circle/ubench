@@ -1,0 +1,5 @@
+benchmark,device,blocks,size_bytes,repeat,total_us,baseline_us,adjusted_us,raw_slope_us,raw_intercept_us,raw_r2,adjusted_slope_us,adjusted_intercept_us,adjusted_r2
+vector_throughput,0,4,65536,500,78.6625,24.4491,54.2134,0.125253,13.4481,0.99993,0.114229,-3.18562,0.999999
+vector_throughput,0,4,65536,1000,136.636,25.7742,110.862,0.125253,13.4481,0.99993,0.114229,-3.18562,0.999999
+vector_throughput,0,4,65536,2500,325.225,43.0613,282.164,0.125253,13.4481,0.99993,0.114229,-3.18562,0.999999
+vector_throughput,0,4,65536,5000,640.543,72.4664,568.077,0.125253,13.4481,0.99993,0.114229,-3.18562,0.999999

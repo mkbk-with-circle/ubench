@@ -1,0 +1,10 @@
+benchmark=scalar_branch_overhead
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,21.221,17.305,3.916
+1000,25.666,16.965,8.701
+2500,40.602,16.647,23.955
+5000,68.543,16.710,51.833
+raw_slope_us=0.010565338 raw_intercept_us=15.236218137 raw_r2=0.998656860
+adjusted_slope_us=0.010677645 adjusted_intercept_us=-1.923324772 adjusted_r2=0.999245705
+output_checksum=726812428606308352

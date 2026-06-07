@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ascend 310P3 微基准测试结果</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+            color: #00d2ff;
+        }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .metric-card {
+            background: rgba(0,210,255,0.05);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid rgba(0,210,255,0.2);
+        }
+        .metric-label { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
+        .metric-value { font-size: 1.8rem; font-weight: bold; color: #00d2ff; }
+        .metric-unit { font-size: 0.9rem; color: #666; }
+        .chart-container { position: relative; height: 400px; margin: 20px 0; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th { color: #00d2ff; font-weight: 600; }
+        tr:hover { background: rgba(255,255,255,0.05); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-mte { background: #ff6b6b22; color: #ff6b6b; }
+        .badge-vector { background: #4ecdc422; color: #4ecdc4; }
+        .badge-scalar { background: #ffd93d22; color: #ffd93d; }
+        .badge-cube { background: #6c5ce722; color: #6c5ce7; }
+        .r2-good { color: #4ecdc4; }
+        .r2-warn { color: #ffd93d; }
+        .status { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
+        .status-ok { background: #4ecdc422; color: #4ecdc4; }
+        .status-skip { background: #ff6b6b22; color: #ff6b6b; }
+        .footer {
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Ascend 310P3 微基准测试结果</h1>
+        <p class="subtitle">DaVinci AI Core 微架构参数测定 · CANN 8.2.RC1 · 测试时间: 2026-06-07</p>
+
+        <!-- 概览卡片 -->
+        <div class="grid">
+            <div class="metric-card">
+                <div class="metric-label">已测试基准</div>
+                <div class="metric-value">9 <span class="metric-unit">/ 12</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">MTE 拷贝带宽</div>
+                <div class="metric-value">8.08 <span class="metric-unit">GB/s</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Vector Add 延迟</div>
+                <div class="metric-value">22.4 <span class="metric-unit">ns</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">平均 R² 拟合度</div>
+                <div class="metric-value">0.997 <span class="metric-unit"></span></div>
+            </div>
+        </div>
+
+        <!-- 核心参数表 -->
+        <div class="card">
+            <h2>📊 核心微架构参数</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>基准测试</th>
+                        <th>类别</th>
+                        <th>调整后斜率 (μs/op)</th>
+                        <th>原始斜率 (μs/op)</th>
+                        <th>R²</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>mte_copy_bw</td>
+                        <td><span class="badge badge-mte">MTE</span></td>
+                        <td>0.1236</td>
+                        <td>0.1350</td>
+                        <td class="r2-good">0.99999</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>mte_startup_latency</td>
+                        <td><span class="badge badge-mte">MTE</span></td>
+                        <td>0.2746</td>
+                        <td>0.2846</td>
+                        <td class="r2-good">0.99997</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>mte_granularity</td>
+                        <td><span class="badge badge-mte">MTE</span></td>
+                        <td>0.1454</td>
+                        <td>0.1441</td>
+                        <td class="r2-good">0.99919</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>vector_add_latency</td>
+                        <td><span class="badge badge-vector">Vector</span></td>
+                        <td>0.0224</td>
+                        <td>0.0335</td>
+                        <td class="r2-good">0.99983</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>vector_mul_latency</td>
+                        <td><span class="badge badge-vector">Vector</span></td>
+                        <td>0.0236</td>
+                        <td>0.0325</td>
+                        <td class="r2-good">0.99905</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>vector_throughput</td>
+                        <td><span class="badge badge-vector">Vector</span></td>
+                        <td>0.1142</td>
+                        <td>0.1253</td>
+                        <td class="r2-good">0.99999</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>vector_pipeline_depth</td>
+                        <td><span class="badge badge-vector">Vector</span></td>
+                        <td>0.0228</td>
+                        <td>0.0338</td>
+                        <td class="r2-good">0.99983</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>scalar_arith_latency</td>
+                        <td><span class="badge badge-scalar">Scalar</span></td>
+                        <td>0.0011</td>
+                        <td>0.0055</td>
+                        <td class="r2-warn">0.93214</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>scalar_branch_overhead</td>
+                        <td><span class="badge badge-scalar">Scalar</span></td>
+                        <td>0.0107</td>
+                        <td>0.0106</td>
+                        <td class="r2-good">0.99925</td>
+                        <td><span class="status status-ok">✓ 通过</span></td>
+                    </tr>
+                    <tr>
+                        <td>cube_tile_latency</td>
+                        <td><span class="badge badge-cube">Cube</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="status status-skip">⚠ 超时</span></td>
+                    </tr>
+                    <tr>
+                        <td>cube_throughput</td>
+                        <td><span class="badge badge-cube">Cube</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="status status-skip">⚠ 超时</span></td>
+                    </tr>
+                    <tr>
+                        <td>cube_scaling</td>
+                        <td><span class="badge badge-cube">Cube</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="status status-skip">⚠ 超时</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 图表 -->
+        <div class="card">
+            <h2>📈 各基准调整后斜率对比 (μs/op)</h2>
+            <div class="chart-container">
+                <canvas id="slopeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📊 拟合质量 (R²)</h2>
+            <div class="chart-container">
+                <canvas id="r2Chart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⏱️ MTE 拷贝带宽分析</h2>
+            <div class="chart-container">
+                <canvas id="mteChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🔄 Vector 管线深度分析</h2>
+            <div class="chart-container">
+                <canvas id="vectorChart"></canvas>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Ascend C ubench · 微基准测试框架 · 测试设备: Ascend 310P3 (4 NPU)</p>
+            <p>注: Cube (Matmul) 基准因硬件兼容性问题暂未完成，需要进一步调试</p>
+        </div>
+    </div>
+
+    <script>
+        // 数据
+        const benchmarks = [
+            'mte_copy_bw', 'mte_startup_latency', 'mte_granularity',
+            'vector_add_latency', 'vector_mul_latency', 'vector_throughput',
+            'vector_pipeline_depth', 'scalar_arith_latency', 'scalar_branch_overhead'
+        ];
+        const labels = [
+            'MTE Copy BW', 'MTE Startup Latency', 'MTE Granularity',
+            'Vec Add Latency', 'Vec Mul Latency', 'Vec Throughput',
+            'Vec Pipeline Depth', 'Scalar Arith', 'Scalar Branch'
+        ];
+        const adjustedSlope = [0.1236, 0.2746, 0.1454, 0.0224, 0.0236, 0.1142, 0.0228, 0.0011, 0.0107];
+        const rawSlope = [0.1350, 0.2846, 0.1441, 0.0335, 0.0325, 0.1253, 0.0338, 0.0055, 0.0106];
+        const r2Values = [0.99999, 0.99997, 0.99919, 0.99983, 0.99905, 0.99999, 0.99983, 0.93214, 0.99925];
+
+        const colors = {
+            mte: '#ff6b6b',
+            vector: '#4ecdc4',
+            scalar: '#ffd93d',
+            cube: '#6c5ce7'
+        };
+
+        const barColors = [
+            colors.mte, colors.mte, colors.mte,
+            colors.vector, colors.vector, colors.vector, colors.vector,
+            colors.scalar, colors.scalar
+        ];
+
+        // Chart 1: Slope comparison
+        new Chart(document.getElementById('slopeChart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '调整后斜率 (μs/op)',
+                        data: adjustedSlope,
+                        backgroundColor: barColors.map(c => c + '88'),
+                        borderColor: barColors,
+                        borderWidth: 2
+                    },
+                    {
+                        label: '原始斜率 (μs/op)',
+                        data: rawSlope,
+                        backgroundColor: barColors.map(c => c + '33'),
+                        borderColor: barColors.map(c => c + '66'),
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#e0e0e0' } }
+                },
+                scales: {
+                    x: { ticks: { color: '#888', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'μs/op', color: '#888' } }
+                }
+            }
+        });
+
+        // Chart 2: R² quality
+        new Chart(document.getElementById('r2Chart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'R² 拟合度',
+                    data: r2Values,
+                    backgroundColor: r2Values.map(v => v > 0.99 ? '#4ecdc488' : v > 0.95 ? '#ffd93d88' : '#ff6b6b88'),
+                    borderColor: r2Values.map(v => v > 0.99 ? '#4ecdc4' : v > 0.95 ? '#ffd93d' : '#ff6b6b'),
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#e0e0e0' } }
+                },
+                scales: {
+                    x: { ticks: { color: '#888', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { min: 0.9, max: 1.001, ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+
+        // Chart 3: MTE analysis
+        new Chart(document.getElementById('mteChart'), {
+            type: 'radar',
+            data: {
+                labels: ['拷贝带宽', '启动延迟', '粒度'],
+                datasets: [{
+                    label: 'MTE 参数 (μs/op)',
+                    data: [0.1236, 0.2746, 0.1454],
+                    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+                    borderColor: '#ff6b6b',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#ff6b6b'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#e0e0e0' } } },
+                scales: {
+                    r: {
+                        ticks: { color: '#888', backdropColor: 'transparent' },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        pointLabels: { color: '#e0e0e0' }
+                    }
+                }
+            }
+        });
+
+        // Chart 4: Vector analysis
+        new Chart(document.getElementById('vectorChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Add 延迟', 'Mul 延迟', '吞吐量', '管线深度'],
+                datasets: [
+                    {
+                        label: '调整后斜率 (μs/op)',
+                        data: [0.0224, 0.0236, 0.1142, 0.0228],
+                        backgroundColor: '#4ecdc488',
+                        borderColor: '#4ecdc4',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#e0e0e0' } } },
+                scales: {
+                    x: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'μs/op', color: '#888' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

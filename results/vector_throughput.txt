@@ -1,0 +1,10 @@
+benchmark=vector_throughput
+device=0 blocks=4 size_bytes=65536 warmup=3 iters=10
+repeat,total_us,baseline_us,adjusted_us
+500,78.662,24.449,54.213
+1000,136.636,25.774,110.862
+2500,325.225,43.061,282.164
+5000,640.543,72.466,568.077
+raw_slope_us=0.125252675 raw_intercept_us=13.448083745 raw_r2=0.999929818
+adjusted_slope_us=0.114228653 adjusted_intercept_us=-3.185620740 adjusted_r2=0.999998889
+output_checksum=135494230436896000
