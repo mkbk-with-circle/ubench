@@ -7,6 +7,8 @@ build_data.py — 从 summary.csv 和逐 benchmark CSV 生成 EMBEDDED_DATA JSON
   python3 results/html/build_data.py                  # 打印 JSON
   python3 results/html/build_data.py --embed           # 写回 index.html
   python3 results/html/build_data.py --embed --html path/to/index.html
+
+离线打开: index.html 依赖同目录 chart.umd.min.js（Chart.js 4.4.0）
 """
 import argparse, csv, json, os, re, sys
 from pathlib import Path

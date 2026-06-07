@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ascend 310P3 μBench 微架构参数测定报告</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="chart.umd.min.js"></script>
 <style>
 :root{--bg:#0a0e17;--card:#111927;--border:rgba(255,255,255,0.06);--text:#c8d6e5;--dim:#5a6a7a;--cyan:#00d4ff;--green:#00e676;--red:#ff5252;--orange:#ff9100;--yellow:#ffd740;--purple:#b388ff;--teal:#00bfa5}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -765,7 +765,7 @@ function renderAnalysis(items) {
       h += `每 repeat: ${KC.vector_throughput.blocks} blocks × ${KC.vector_throughput.lanes} lanes × ${KC.vector_throughput.elems} elems = <strong>${d.total_ops_per_repeat} FP32 ops</strong><br>`;
       h += `GFLOPS = ${d.total_ops_per_repeat} / ${b.slope_us}μs ≈ <strong>${d.primary_value} GFLOPS</strong><br>`;
       h += `ops/cycle = ${KC.vector_throughput.blocks*KC.vector_throughput.lanes} / (${b.slope_us}μs × 1GHz) ≈ <strong>${d.ops_per_cycle} ops/cycle</strong><br>`;
-      h += `注: 含 DataCopy + PipeBarrier 开销，未满占流水线，~${(d.gflops/100).toFixed(0)}% 峰值。`;
+      h += `注: 含 DataCopy + PipeBarrier 开销，为端到端 repeat 吞吐，非裸向量峰值。`;
     } else if (b.name === 'vector_add_latency' || b.name === 'vector_mul_latency') {
       h += `RAW 依赖链延迟 <code>${b.derived.primary_value} ns</code>，含 PipeBarrier 同步。`;
     } else if (b.name === 'vector_pipeline_depth') {
@@ -827,8 +827,10 @@ function renderCube() {
 function renderOverview() {
   return `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.15)">📈</div><h2>综合对比 — 所有微架构参数</h2></div><div class="sb">
     <div class="cg">
-      <div class="cb"><h3>派生指标对比</h3><canvas id="overview_derived" height="280"></canvas></div>
-      <div class="cb"><h3>拟合质量 R²</h3><canvas id="overview_r2" height="280"></canvas></div>
+      <div class="cb"><h3>带宽 (GB/s)</h3><canvas id="overview_bw" height="220"></canvas></div>
+      <div class="cb"><h3>吞吐 (GFLOPS)</h3><canvas id="overview_gflops" height="220"></canvas></div>
+      <div class="cb"><h3>延迟 (ns)</h3><canvas id="overview_lat" height="220"></canvas></div>
+      <div class="cb"><h3>拟合质量 R²</h3><canvas id="overview_r2" height="220"></canvas></div>
     </div>
     <div class="ab" style="margin-top:18px">
       <h3>⚠ 310P 免责声明</h3>
@@ -849,66 +851,117 @@ const CO = (yl) => ({
 
 function drawFit(cid, b, color) {
   const el = document.getElementById(cid);
-  if (!el) return;
+  if (!el || typeof Chart === 'undefined') return;
   const sw = b.sweep;
-  const reps = sw.map(s=>s.repeat);
+  const reps = sw.map(s => s.repeat);
+  const adj = sw.map(s => s.adjusted_us);
   const fitY = reps.map(x => b.slope_us * x + b.intercept_us);
+  const ic = b.intercept_us >= 0 ? '+' : '';
   new Chart(el.getContext('2d'), {
-    type:'line',
-    data:{
+    type: 'line',
+    data: {
       labels: reps,
-      datasets:[
-        {label:'total (μs)', data:sw.map(s=>s.total_us), borderColor:color, backgroundColor:color+'33', pointRadius:4, borderWidth:2, tension:0},
-        {label:'baseline (μs)', data:sw.map(s=>s.baseline_us), borderColor:'#5a6a7a', borderDash:[5,5], pointRadius:2, borderWidth:1.2, tension:0},
-        {label:`fit: y=${b.slope_us}·x+${b.intercept_us.toFixed(1)}`, data:fitY, borderColor:color+'88', borderDash:[2,2], pointRadius:0, borderWidth:1}
+      datasets: [
+        { label: 'adjusted (μs)', data: adj, borderColor: color, backgroundColor: color + '33',
+          pointRadius: 5, borderWidth: 2.5, tension: 0 },
+        { label: `fit adj: ${b.slope_us}·N${ic}${b.intercept_us.toFixed(1)}`, data: fitY,
+          borderColor: color + 'cc', borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: 'total (μs)', data: sw.map(s => s.total_us), borderColor: color + '66',
+          borderDash: [2, 4], pointRadius: 3, borderWidth: 1, tension: 0 },
+        { label: 'baseline (μs)', data: sw.map(s => s.baseline_us), borderColor: '#5a6a7a',
+          borderDash: [5, 5], pointRadius: 2, borderWidth: 1, tension: 0 }
       ]
     },
     options: CO('time (μs)')
   });
 }
 
+function drawBar(cid, labels, vals, colors, yLabel, unit) {
+  const el = document.getElementById(cid);
+  if (!el || typeof Chart === 'undefined' || !labels.length) return;
+  const base = CO(yLabel);
+  new Chart(el.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: yLabel, data: vals,
+        backgroundColor: colors.map(c => c + '88'),
+        borderColor: colors, borderWidth: 2
+      }]
+    },
+    options: {
+      ...base,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y}${unit ? ' ' + unit : ''}`
+          }
+        }
+      }
+    }
+  });
+}
+
 function drawCharts() {
-  const COLORS = {mte_copy_bw:'#ff5252',mte_startup_latency:'#ff9100',mte_granularity:'#ff6d00',
-    vector_add_latency:'#00e676',vector_mul_latency:'#00d4ff',vector_throughput:'#00bfa5',vector_pipeline_depth:'#64ffda',
-    scalar_arith_latency:'#ffd740',scalar_branch_overhead:'#ff9100'};
+  if (typeof Chart === 'undefined') return;
+
+  const COLORS = {
+    mte_copy_bw: '#ff5252', mte_startup_latency: '#ff9100', mte_granularity: '#ff6d00',
+    vector_add_latency: '#00e676', vector_mul_latency: '#00d4ff', vector_throughput: '#00bfa5',
+    vector_pipeline_depth: '#64ffda', scalar_arith_latency: '#ffd740', scalar_branch_overhead: '#ff9100'
+  };
 
   for (const b of ok) {
     drawFit(`chart_${b.name}`, b, COLORS[b.name] || '#888');
   }
 
-  // overview: derived bar chart
-  const okNoScalar = ok.filter(b => !b.unreliable);
-  const labels = okNoScalar.map(b => b.label);
-  const vals = okNoScalar.map(b => {
-    if (b.derived.bandwidth_gbs) return b.derived.bandwidth_gbs;
-    if (b.derived.gflops) return b.derived.gflops;
-    return b.derived.latency_ns || 0;
-  });
-  const units = okNoScalar.map(b => b.derived.primary_unit || '');
-  const colors = okNoScalar.map(b => COLORS[b.name] || '#888');
+  const reliable = ok.filter(b => !b.unreliable);
 
-  const el1 = document.getElementById('overview_derived');
-  if (el1) {
-    new Chart(el1.getContext('2d'), {
-      type:'bar',
-      data:{labels, datasets:[{label:'派生值',data:vals,backgroundColor:colors.map(c=>c+'88'),borderColor:colors,borderWidth:2}]},
-      options:{...CO('派生值 (混合单位: GB/s, GFLOPS, ns)'),
-        plugins:{...CO('').plugins,tooltip:{callbacks:{label:(ctx)=>`${ctx.parsed.y} ${units[ctx.dataIndex]}`}}}}
-    });
-  }
+  // 按单位分组，避免 GB/s 与 ns 混在同一坐标轴
+  const bwItems = reliable.filter(b => b.derived.bandwidth_gbs);
+  drawBar('overview_bw',
+    bwItems.map(b => b.label),
+    bwItems.map(b => b.derived.bandwidth_gbs),
+    bwItems.map(b => COLORS[b.name] || '#888'),
+    'GB/s', 'GB/s');
 
-  // overview: R² bar chart
-  const allLabels = ok.map(b=>b.label);
-  const r2s = ok.map(b=>b.r2);
-  const r2colors = r2s.map(v=>v>=0.99?'#00e67688':v>=0.95?'#ffd74088':'#ff525288');
-  const r2borders = r2s.map(v=>v>=0.99?'#00e676':v>=0.95?'#ffd740':'#ff5252');
+  const tpItems = reliable.filter(b => b.derived.gflops);
+  drawBar('overview_gflops',
+    tpItems.map(b => b.label),
+    tpItems.map(b => b.derived.gflops),
+    tpItems.map(b => COLORS[b.name] || '#888'),
+    'GFLOPS', 'GFLOPS');
+
+  const latItems = reliable.filter(b => b.derived.latency_ns);
+  drawBar('overview_lat',
+    latItems.map(b => b.label),
+    latItems.map(b => b.derived.latency_ns),
+    latItems.map(b => COLORS[b.name] || '#888'),
+    'ns', 'ns');
+
+  const allLabels = ok.map(b => b.label);
+  const r2s = ok.map(b => b.r2);
+  const r2colors = r2s.map(v => v >= 0.99 ? '#00e67688' : v >= 0.95 ? '#ffd74088' : '#ff525288');
+  const r2borders = r2s.map(v => v >= 0.99 ? '#00e676' : v >= 0.95 ? '#ffd740' : '#ff5252');
 
   const el2 = document.getElementById('overview_r2');
   if (el2) {
     new Chart(el2.getContext('2d'), {
-      type:'bar',
-      data:{labels:allLabels,datasets:[{label:'R²',data:r2s,backgroundColor:r2colors,borderColor:r2borders,borderWidth:2}]},
-      options:{...CO('R²'),scales:{x:CO('').scales.x,y:{min:0.9,max:1.0005,ticks:{color:'#5a6a7a'},grid:{color:'rgba(255,255,255,.04)'}}}}
+      type: 'bar',
+      data: {
+        labels: allLabels,
+        datasets: [{ label: 'R²', data: r2s, backgroundColor: r2colors, borderColor: r2borders, borderWidth: 2 }]
+      },
+      options: {
+        ...CO('R²'),
+        plugins: { legend: { display: false } },
+        scales: {
+          x: CO('').scales.x,
+          y: { min: 0.9, max: 1.0005, ticks: { color: '#5a6a7a' }, grid: { color: 'rgba(255,255,255,.04)' } }
+        }
+      }
     });
   }
 }
@@ -938,7 +991,15 @@ function render() {
   html += renderOverview();
 
   document.getElementById('app').innerHTML = html;
-  drawCharts();
+  if (typeof Chart === 'undefined') {
+    const warn = document.createElement('div');
+    warn.className = 'ab warn-box';
+    warn.style.marginBottom = '20px';
+    warn.innerHTML = '<h3>⚠ 图表库未加载</h3><p>请确保 <code>chart.umd.min.js</code> 与本页面位于同一目录，或通过本地 HTTP 服务打开。</p>';
+    document.getElementById('app').prepend(warn);
+    return;
+  }
+  try { drawCharts(); } catch (e) { console.error('drawCharts failed:', e); }
 }
 
 render();
