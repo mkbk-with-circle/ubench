@@ -53,25 +53,32 @@ class ScalarThroughputBench(AscendBenchmark):
         """
         Execute many independent scalar operations.
         Returns elapsed time in milliseconds.
+        Uses pre-allocated tensors to avoid allocation overhead.
         """
-        timer = EventTimer()
-
         if HAS_NPU:
-            # Create independent scalar tensors
-            # Each operation is independent, allowing parallel execution
+            # Pre-allocate all tensors
             values = [torch.tensor([float(i)], device="npu") for i in range(num_ops)]
-            results = []
+            results = [torch.zeros(1, device="npu") for _ in range(num_ops)]
 
-            timer.record_start()
+            # Warmup
+            for _ in range(5):
+                for i in range(num_ops):
+                    results[i].copy_(values[i] + values[i])
+            torch.npu.synchronize()
+
+            # Pre-allocate events
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+
+            start_e.record()
             for i in range(num_ops):
-                # Each operation is independent (reads from separate tensors)
-                r = values[i] + values[i]  # independent addition
-                results.append(r)
-            timer.record_end()
-
-            elapsed = timer.elapsed_ms()
+                results[i].copy_(values[i] + values[i])
+            end_e.record()
+            torch.npu.synchronize()
+            elapsed = start_e.elapsed_time(end_e)
         else:
             values = [float(i) for i in range(num_ops)]
+            timer = EventTimer()
             timer.record_start()
             results = []
             for i in range(num_ops):
@@ -82,7 +89,7 @@ class ScalarThroughputBench(AscendBenchmark):
 
         return elapsed
 
-    def measure_throughput(self, op_counts=None, num_warmup=3, num_iters=30):
+    def measure_throughput(self, op_counts=None, num_warmup=5, num_iters=30):
         """
         Measure throughput at different operation counts to find saturation.
         """

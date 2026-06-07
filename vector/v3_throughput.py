@@ -44,24 +44,35 @@ class VectorThroughputBench(AscendBenchmark):
         )
 
     def bench_kernel(self, num_ops=1000, vec_size=256) -> float:
-        """Execute many independent vector additions. Returns time in ms."""
-        timer = EventTimer()
-
+        """Execute many independent vector additions. Returns time in ms.
+        Uses pre-allocated tensors and batched measurement for accurate timing.
+        """
         if HAS_NPU:
-            # Create many independent vector inputs
+            # Pre-allocate all tensors (avoid allocation overhead during measurement)
             inputs_a = [torch.randn(vec_size, device="npu") for _ in range(num_ops)]
             inputs_b = [torch.randn(vec_size, device="npu") for _ in range(num_ops)]
-            outputs = []
+            outputs = [torch.zeros(vec_size, device="npu") for _ in range(num_ops)]
 
-            timer.record_start()
+            # Warmup
+            for _ in range(5):
+                for i in range(num_ops):
+                    outputs[i].copy_(inputs_a[i] + inputs_b[i])
+            torch.npu.synchronize()
+
+            # Pre-allocate events
+            start_e = torch.npu.Event(enable_timing=True)
+            end_e = torch.npu.Event(enable_timing=True)
+
+            start_e.record()
             for i in range(num_ops):
-                r = inputs_a[i] + inputs_b[i]  # independent vector add
-                outputs.append(r)
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+                outputs[i].copy_(inputs_a[i] + inputs_b[i])
+            end_e.record()
+            torch.npu.synchronize()
+            elapsed = start_e.elapsed_time(end_e)
         else:
             inputs_a = [np.random.randn(vec_size).astype(np.float32) for _ in range(num_ops)]
             inputs_b = [np.random.randn(vec_size).astype(np.float32) for _ in range(num_ops)]
+            timer = EventTimer()
             timer.record_start()
             outputs = []
             for i in range(num_ops):
@@ -73,7 +84,7 @@ class VectorThroughputBench(AscendBenchmark):
         return elapsed
 
     def measure_throughput(self, op_counts=None, vec_size=256,
-                           num_warmup=3, num_iters=20):
+                           num_warmup=5, num_iters=30):
         """Sweep operation counts to find saturation throughput."""
         if op_counts is None:
             op_counts = [10, 50, 100, 500, 1000, 2000, 5000]

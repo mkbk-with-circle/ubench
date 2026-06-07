@@ -46,23 +46,32 @@ class MatMulThroughputBench(AscendBenchmark):
 
     def bench_kernel(self, m=1024, n=1024, k=1024) -> float:
         """
-        Execute a single large matrix multiplication.
+        Execute a matrix multiplication with pre-allocated tensors.
         Returns time in milliseconds.
+        Uses wallclock timing for more reliable results on NPU.
         """
-        timer = EventTimer()
+        import time as _time
 
         if HAS_NPU:
             a = torch.randn(m, k, device="npu")
             b = torch.randn(k, n, device="npu")
 
-            timer.record_start()
+            # Warmup
+            for _ in range(5):
+                c = torch.mm(a, b)
+            torch.npu.synchronize()
+
+            # Wallclock timing with sync (more reliable for large matmuls)
+            torch.npu.synchronize()
+            t0 = _time.perf_counter()
             c = torch.mm(a, b)
-            timer.record_end()
-            elapsed = timer.elapsed_ms()
+            torch.npu.synchronize()
+            t1 = _time.perf_counter()
+            elapsed = (t1 - t0) * 1000.0  # ms
         else:
             a = np.random.randn(m, k).astype(np.float32)
             b = np.random.randn(k, n).astype(np.float32)
-
+            timer = EventTimer()
             timer.record_start()
             c = a @ b
             timer.record_end()
@@ -70,10 +79,9 @@ class MatMulThroughputBench(AscendBenchmark):
 
         return elapsed
 
-    def measure_throughput(self, sizes=None, num_warmup=5, num_iters=10):
+    def measure_throughput(self, sizes=None, num_warmup=5, num_iters=20):
         """Sweep matrix sizes to find peak throughput."""
         if sizes is None:
-            # Square matrices for simplicity
             sizes = [64, 128, 256, 512, 1024, 2048, 4096, 8192]
 
         results = []
