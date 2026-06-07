@@ -175,21 +175,27 @@
 
 | 参数 | 测量值 | 单位 | 说明 |
 |------|--------|------|------|
-| M1 L1读带宽 | 0.18 | GB/s | PyTorch copy_ 操作，含调度开销 |
-| M2 L1写带宽 | 0.20 | GB/s | PyTorch fill_ 操作 |
-| M3 L0A带宽 | 16.38 | GB/s | median 值 |
-| M4 L0B带宽 | 16.38 | GB/s | median 值 |
-| M5 L0C带宽 | 4.62 | GB/s | median 值 |
-| M6 HBM访存延迟 | 110.90 | cycles | 64MB 数组随机访问 |
-| M7 L1容量 | 16 | KB | 性能悬崖探测 |
-| M8 启动开销 | 40808 | cycles | 线性外推 |
+| M1 L1读带宽 | 21.00 | GB/s | 512KB 数据，batch=5，L1 驻留数据 |
+| M2 L1写带宽 | 16.27 | GB/s | 512KB 数据，zero_() 写入 |
+| M3 L0A带宽 | 18.31 | GB/s | matmul 1024×1024，预分配张量 |
+| M4 L0B带宽 | 18.20 | GB/s | matmul 1024×1024，预分配张量 |
+| M5 L0C带宽 | 43.79 | GB/s | matmul 1024×1024×16，小 K 聚焦 L0C |
+| M6 HBM访存延迟 | 247224 | cycles | 64MB 数组，pointer chasing |
+| M7 L1容量悬崖 | ~16-512 KB | — | 从 M7 带宽曲线推断 |
+| M8 启动开销 | 61558 | cycles | 线性外推 |
+
+**MTE 测量优化**：
+- **批量测量**：每个测量迭代执行 N 次拷贝，摊薄 event 记录和 NPU 同步的固定开销（~0.06ms）
+- **适度 batch**：L1 范围用 batch=5-20（避免过度摊薄），HBM 范围用 batch=2-10
+- **30 次 warmup**：确保数据在 L1 中稳定驻留
+- **预分配张量**：排除内存分配开销
 
 **分析**：
-- M1/M2 的低带宽（~0.2 GB/s）是因为测量方式通过 PyTorch 高层 API，包含了 Python 层面的调度开销。实际 L1 Buffer 带宽应在 TB/s 量级。从 M7 的带宽悬崖数据看，4096KB 时达到 163 GB/s 的峰值。
-- M3/M4 的 L0A/L0B 带宽（~16.4 GB/s）和 M5 的 L0C 带宽（~4.6 GB/s）反映了 Cube Unit 数据通路的实际吞吐。
-- M6 的 HBM 延迟（~111 cycles）符合 LPDDR4X 内存的典型延迟特征。
-- M7 的 L1 容量悬崖出现在 16KB 处（带宽从峰值骤降），这可能反映了 L1 Cache 的实际容量或 PyTorch 内存分配策略的影响。从 M7 的详细数据看，带宽在 4096-8192 KB 处达到峰值（~163-166 GB/s），然后在 16384 KB 处骤降至 ~85 GB/s。
-- M8 的启动开销（~40808 cycles）较大，反映了 DMA 引擎的配置和描述符处理开销。
+- M1/M2 的 L1 带宽（~16-21 GB/s）是通过 PyTorch copy_()/zero_() 测量的有效带宽，包含 PyTorch 调度开销。实际 L1 硬件带宽应在 TB/s 量级。
+- M3/M4 的 L0A/L0B 带宽（~18 GB/s）通过 matmul 间接测量，反映了 Cube Unit 数据通路的实际吞吐。
+- M5 的 L0C 带宽（~44 GB/s）高于 L0A/L0B，因为使用小 K（16）使结果写回成为主要数据通路。
+- M6 的 HBM 延迟（~247K cycles）通过 pointer chasing 测量，每次访问 500 次随机索引取平均。
+- M8 的 DMA 启动开销（~61558 cycles ≈ 61.6μs）反映了 MTE 引擎的配置和描述符处理开销。
 
 ---
 
@@ -199,12 +205,15 @@
 
 | 参数 | 测量值 | 理论值 | 说明 |
 |------|--------|--------|------|
-| S1 标量延迟 | 18130 cycles | ~4 cycles | 测量值含 Python 开销，实际应更低 |
+| S1 标量延迟 | 19467 cycles | ~4 cycles | 测量值含 Python 循环开销 |
 | V1 向量加法延迟 | ~2 cycles (median) | ~1-2 cycles | median 值接近理论 |
-| C1 单tile延迟 | 10.12 cycles | ~8-16 cycles | 符合预期 |
-| C2 峰值吞吐 | 36.10 TFLOPS | ~8 TFLOPS (FP32) | 测量值包含 FP32 累加效应 |
-| M6 HBM延迟 | 111 cycles | ~100-200 cycles | 符合预期 |
-| M7 L1容量 | 16 KB (悬崖) | 512 KB | 悬崖点可能受 PyTorch 分配策略影响 |
+| C1 单tile延迟 | 96827 cycles | ~8-16 cycles | 含 Python 调度开销 |
+| C2 峰值吞吐 | 30690 TFLOPS | ~8 TFLOPS (FP32) | 测量方式导致偏高 |
+| M1 L1读带宽 | 21.00 GB/s | ~TB/s | PyTorch 调度开销限制 |
+| M2 L1写带宽 | 16.27 GB/s | ~TB/s | 同上 |
+| M6 HBM延迟 | 247224 cycles | ~100-200 cycles | pointer chasing, 含 Python 开销 |
+| M7 L1容量 | 16-512 KB | 512 KB | 悬崖点受 batch 大小影响 |
+| M8 DMA启动 | 61558 cycles | ~μs 级 | 符合预期 |
 
 ### 4.2 讨论
 
