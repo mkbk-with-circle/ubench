@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build script for Ascend C ubench using bisheng compiler
+# Target: Ascend 910B (c220) with CANN 9.0.0
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,11 +9,11 @@ BIN_DIR="${BUILD_DIR}/bin"
 OBJ_DIR="${BUILD_DIR}/obj"
 
 # CANN paths
-CANN="${ASCEND_CANN_PACKAGE_PATH:-/usr/local/Ascend/ascend-toolkit/8.2.RC1/aarch64-linux}"
-BISHENG="${CANN}/ccec_compiler/bin/bisheng"
-CCEC="${CANN}/ccec_compiler/bin/ccec"
+CANN="${ASCEND_CANN_PACKAGE_PATH:-/usr/local/Ascend/cann-9.0.0}"
+BISHENG="${CANN}/aarch64-linux/ccec_compiler/bin/bisheng"
+CCEC="${CANN}/aarch64-linux/ccec_compiler/bin/ccec"
 PACK_KERNEL="${CANN}/bin/ascendc_pack_kernel"
-TIKCPP="${CANN}/tikcpp/tikcfw"
+TIKCPP="${CANN}/aarch64-linux/tikcpp/tikcfw"
 
 mkdir -p "${BIN_DIR}" "${OBJ_DIR}"
 
@@ -20,17 +21,39 @@ echo "=== Building Ascend C ubench ==="
 echo "CANN: ${CANN}"
 echo "Bisheng: ${BISHENG}"
 
-# ── Device kernel compilation ────────────────────────────────────────────────
-DEVICE_FLAGS=(
-  -I"${ROOT_DIR}/device_includes"
+# ── Device kernel compilation flags (910B c220 vec mode) ──────────────────────
+DEVICE_VEC_FLAGS=(
   -I"${TIKCPP}" -I"${TIKCPP}/interface" -I"${TIKCPP}/impl"
   -I"${CANN}/include"
-  --cce-aicore-arch=dav-m200
-  --cce-aicore-only --cce-auto-sync --cce-mask-opt
+  -I"${CANN}/aarch64-linux/asc/include"
+  -I"${CANN}/aarch64-linux/asc/include/basic_api"
+  -I"${CANN}/aarch64-linux/asc/include/adv_api"
+  --cce-aicore-arch=dav-c220-vec
+  --cce-aicore-only --cce-auto-sync
   --cce-disable-kernel-global-attr-check
-  -mllvm -cce-aicore-fp-ceiling=2
-  -mllvm -cce-aicore-record-overflow=false
-  -mllvm -cce-aicore-mask-opt=false
+  -mllvm -cce-aicore-stack-size=0x8000
+  -mllvm -cce-aicore-function-stack-size=0x8000
+  -mllvm -cce-aicore-record-overflow=true
+  -mllvm -cce-aicore-addr-transform
+  -mllvm -cce-aicore-dcci-insert-for-scalar=false
+  -O3 -std=c++17 --cce-aicore-lang
+)
+
+# ── Device kernel compilation flags (910B c220 cube mode) ─────────────────────
+DEVICE_CUBE_FLAGS=(
+  -I"${TIKCPP}" -I"${TIKCPP}/interface" -I"${TIKCPP}/impl"
+  -I"${CANN}/include"
+  -I"${CANN}/aarch64-linux/asc/include"
+  -I"${CANN}/aarch64-linux/asc/include/basic_api"
+  -I"${CANN}/aarch64-linux/asc/include/adv_api"
+  --cce-aicore-arch=dav-c220-cube
+  --cce-aicore-only --cce-auto-sync
+  --cce-disable-kernel-global-attr-check
+  -mllvm -cce-aicore-stack-size=0x8000
+  -mllvm -cce-aicore-function-stack-size=0x8000
+  -mllvm -cce-aicore-record-overflow=true
+  -mllvm -cce-aicore-addr-transform
+  -mllvm -cce-aicore-dcci-insert-for-scalar=false
   -O3 -std=c++17 --cce-aicore-lang
 )
 
@@ -38,6 +61,8 @@ DEVICE_FLAGS=(
 HOST_KERNEL_FLAGS=(
   -I"${TIKCPP}" -I"${TIKCPP}/interface" -I"${TIKCPP}/impl"
   -I"${CANN}/include"
+  -I"${CANN}/aarch64-linux/asc/include"
+  -I"${CANN}/aarch64-linux/asc/include/basic_api"
   --cce-host-only --cce-aicore-lang
   -fPIC -O2 -std=c++17
 )
@@ -49,18 +74,26 @@ HOST_FLAGS=(
   -I"${ROOT_DIR}/common"
   -I"${CANN}/include"
   -I"${CANN}/include/aclnn"
-  -DASCEND_SOC_VERSION="Ascend310P3"
+  -DASCEND_SOC_VERSION="ascend910_9362"
   -DASCEND_OPT_LEVEL="O2"
 )
 
 HOST_LINK_FLAGS=(
+  -Wl,--allow-shlib-undefined
+  -Wl,--start-group
   -L"${CANN}/lib64"
-  -L"${CANN}/runtime/lib64"
-  -lascendcl -lpthread -ldl
+  -L"${CANN}/aarch64-linux/lib64"
+  -L/usr/local/Ascend/driver/lib64
+  -L/usr/local/Ascend/driver/lib64/common
+  -L/usr/local/Ascend/driver/lib64/driver
+  -lascendcl -lruntime -ltiling_api -lregister -lplatform -lerror_manager -lprofapi
+  -lge_common -lge_common_base -lgert -lunified_dlog -lascend_dump -lmmpa -lc_sec
+  -Wl,--end-group
+  -lpthread -ldl
 )
 
-# ── Kernel sources ───────────────────────────────────────────────────────────
-KERNELS=(
+# ── Vector kernel sources ────────────────────────────────────────────────────
+VEC_KERNELS=(
   "mte/copy_bw/kernel.cpp:mte_copy_bw"
   "mte/startup_latency/kernel.cpp:mte_startup_latency"
   "mte/granularity/kernel.cpp:mte_granularity"
@@ -68,8 +101,12 @@ KERNELS=(
   "vector/mul_latency/kernel.cpp:vector_mul_latency"
   "vector/throughput/kernel.cpp:vector_throughput"
   "vector/pipeline_depth/kernel.cpp:vector_pipeline_depth"
-  "cube/cube_matmul_kernel.cpp:cube_matmul"
   "scalar/scalar_kernel.cpp:scalar"
+)
+
+# ── Cube kernel sources ──────────────────────────────────────────────────────
+CUBE_KERNELS=(
+  "cube/cube_matmul_kernel.cpp:cube_matmul"
 )
 
 # ── Benchmark definitions ────────────────────────────────────────────────────
@@ -93,21 +130,32 @@ COMMON_SRCS=(
   "common/bench_utils.cpp"
 )
 
-# ── Step 1: Compile device kernels ───────────────────────────────────────────
+# ── Step 1: Compile vector device kernels ────────────────────────────────────
 echo ""
-echo "=== Step 1: Compile device kernels ==="
-for entry in "${KERNELS[@]}"; do
+echo "=== Step 1: Compile vector device kernels ==="
+for entry in "${VEC_KERNELS[@]}"; do
   src="${ROOT_DIR}/${entry%%:*}"
   name="${entry##*:}"
-  out="${OBJ_DIR}/${name}_device.o"
-  echo "  ${name} (device)"
-  "${CCEC}" "${DEVICE_FLAGS[@]}" -o "${out}" -c "${src}" 2>&1 | head -3
+  out="${OBJ_DIR}/${name}_device_vec.o"
+  echo "  ${name} (device vec)"
+  "${CCEC}" "${DEVICE_VEC_FLAGS[@]}" -o "${out}" -c "${src}" 2>&1 | head -3
 done
 
-# ── Step 2: Compile host kernel objects ──────────────────────────────────────
+# ── Step 2: Compile cube device kernels ──────────────────────────────────────
 echo ""
-echo "=== Step 2: Compile host kernel objects ==="
-for entry in "${KERNELS[@]}"; do
+echo "=== Step 2: Compile cube device kernels ==="
+for entry in "${CUBE_KERNELS[@]}"; do
+  src="${ROOT_DIR}/${entry%%:*}"
+  name="${entry##*:}"
+  out="${OBJ_DIR}/${name}_device_cube.o"
+  echo "  ${name} (device cube)"
+  "${CCEC}" "${DEVICE_CUBE_FLAGS[@]}" -o "${out}" -c "${src}" 2>&1 | head -3
+done
+
+# ── Step 3: Compile host kernel objects ──────────────────────────────────────
+echo ""
+echo "=== Step 3: Compile host kernel objects ==="
+for entry in "${VEC_KERNELS[@]}" "${CUBE_KERNELS[@]}"; do
   src="${ROOT_DIR}/${entry%%:*}"
   name="${entry##*:}"
   out="${OBJ_DIR}/${name}_host.o"
@@ -115,9 +163,9 @@ for entry in "${KERNELS[@]}"; do
   "${BISHENG}" "${HOST_KERNEL_FLAGS[@]}" -o "${out}" -c "${src}" 2>&1 | head -3
 done
 
-# ── Step 3: Compile common host objects ──────────────────────────────────────
+# ── Step 4: Compile common host objects ──────────────────────────────────────
 echo ""
-echo "=== Step 3: Compile common host objects ==="
+echo "=== Step 4: Compile common host objects ==="
 for src in "${COMMON_SRCS[@]}"; do
   name=$(basename "${src}" .cpp)
   out="${OBJ_DIR}/${name}.o"
@@ -125,21 +173,33 @@ for src in "${COMMON_SRCS[@]}"; do
   "${HOST_CXX}" "${HOST_FLAGS[@]}" -o "${out}" -c "${ROOT_DIR}/${src}" 2>&1 | head -3
 done
 
-# ── Step 4: Pack device kernels into host objects ────────────────────────────
+# ── Step 5: Pack device kernels into host objects ────────────────────────────
 echo ""
-echo "=== Step 4: Pack device kernels ==="
-for entry in "${KERNELS[@]}"; do
+echo "=== Step 5: Pack device kernels ==="
+
+# Pack vector kernels (vec mode)
+for entry in "${VEC_KERNELS[@]}"; do
   name="${entry##*:}"
   host_obj="${OBJ_DIR}/${name}_host.o"
-  device_obj="${OBJ_DIR}/${name}_device.o"
+  device_obj="${OBJ_DIR}/${name}_device_vec.o"
   packed_obj="${OBJ_DIR}/${name}_packed.o"
-  echo "  ${name}"
-  "${PACK_KERNEL}" "${host_obj}" "${device_obj}" m200 "${packed_obj}" 2>&1 | head -3
+  echo "  ${name} (vec)"
+  "${PACK_KERNEL}" "${host_obj}" "${device_obj}" 0 "${packed_obj}" 2>&1 | head -3
 done
 
-# ── Step 5: Link benchmarks ─────────────────────────────────────────────────
+# Pack cube kernels (cube mode)
+for entry in "${CUBE_KERNELS[@]}"; do
+  name="${entry##*:}"
+  host_obj="${OBJ_DIR}/${name}_host.o"
+  device_obj="${OBJ_DIR}/${name}_device_cube.o"
+  packed_obj="${OBJ_DIR}/${name}_packed.o"
+  echo "  ${name} (cube)"
+  "${PACK_KERNEL}" "${host_obj}" "${device_obj}" 1 "${packed_obj}" 2>&1 | head -3
+done
+
+# ── Step 6: Link benchmarks ─────────────────────────────────────────────────
 echo ""
-echo "=== Step 5: Link benchmarks ==="
+echo "=== Step 6: Link benchmarks ==="
 
 COMMON_OBJS=()
 for src in "${COMMON_SRCS[@]}"; do

@@ -12,8 +12,8 @@ elif [[ -n "${ASCEND_CANN_PACKAGE_PATH:-}" && -f "${ASCEND_CANN_PACKAGE_PATH}/se
   source "${ASCEND_CANN_PACKAGE_PATH}/set_env.sh"
 fi
 
-: "${ASCEND_CANN_PACKAGE_PATH:=/usr/local/Ascend/ascend-toolkit/latest}"
-: "${ASCEND_SOC_VERSION:=Ascend310P3}"
+: "${ASCEND_CANN_PACKAGE_PATH:=/usr/local/Ascend/cann-9.0.0}"
+: "${ASCEND_SOC_VERSION:=ascend910b}"
 : "${ASCEND_OPT_LEVEL:=O2}"
 
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \

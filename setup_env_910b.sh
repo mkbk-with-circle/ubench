@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Environment setup script for Ascend C ubench
+# Environment setup script for Ascend C ubench on 910B (CANN 9.0.0)
 # Source this file to set up the build environment:
-#   source setup_env.sh
+#   source setup_env_910b.sh
 
 set -euo pipefail
 
 # ── CANN toolkit path ────────────────────────────────────────────────────────
-# CANN 9.0.0 on Ascend 910B (aarch64)
 export ASCEND_CANN_PACKAGE_PATH="/usr/local/Ascend/cann-9.0.0"
-export ASCEND_SOC_VERSION="ascend910b"
+export ASCEND_SOC_VERSION="ascend910_9362"
 export ASCEND_OPT_LEVEL="O2"
 
 # Source CANN environment
@@ -18,13 +17,16 @@ elif [[ -f "${ASCEND_CANN_PACKAGE_PATH}/set_env.sh" ]]; then
   source "${ASCEND_CANN_PACKAGE_PATH}/set_env.sh"
 fi
 
+# Add ccec compiler to PATH (needed for cmake build)
+export PATH="${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/ccec_compiler/bin:${PATH}"
+
 # ── Build paths ──────────────────────────────────────────────────────────────
 export UBENCH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export UBENCH_BUILD_DIR="${UBENCH_ROOT}/build_full"
 export UBENCH_BIN_DIR="${UBENCH_BUILD_DIR}/bin"
 
 # ── Verify environment ──────────────────────────────────────────────────────
-echo "=== Ascend C ubench environment ==="
+echo "=== Ascend C ubench environment (910B) ==="
 echo "CANN path:     ${ASCEND_CANN_PACKAGE_PATH}"
 echo "SoC version:   ${ASCEND_SOC_VERSION}"
 echo "Opt level:     ${ASCEND_OPT_LEVEL}"
@@ -41,5 +43,5 @@ else
 fi
 
 echo ""
-echo "To build:  cmake --build ${UBENCH_BUILD_DIR} -j\$(nproc)"
+echo "To build:  bash scripts/build_one_click.sh"
 echo "To run:    bash scripts/run_all.sh"

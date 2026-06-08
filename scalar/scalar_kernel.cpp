@@ -19,9 +19,27 @@ class ScalarArithKernel {
     uint32_t x = GetBlockIdx() + 1;
     for (uint32_t i = 0; i < repeats; ++i) {
       if constexpr (DoArithmetic) {
+        // Chain 16 dependent multiply-adds to amplify per-iteration cost
+        // Each is a RAW dependency, so they cannot be parallelized
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
+        x = x * 1664525u + 1013904223u;
         x = x * 1664525u + 1013904223u;
       } else {
-        x += (i & 1u);
+        // Minimal baseline: just loop counter, no computation on x
+        x += (i == 0xFFFFFFFFu);  // never true, but prevents optimizing away x
       }
     }
     output_.SetValue(0, x);

@@ -13,7 +13,7 @@ endif()
 
 set(ASCEND_SOC_VERSION "$ENV{ASCEND_SOC_VERSION}" CACHE STRING "Target SoC")
 if(NOT ASCEND_SOC_VERSION)
-  set(ASCEND_SOC_VERSION "Ascend310P3")
+  set(ASCEND_SOC_VERSION "ascend910b")
 endif()
 
 set(ASCEND_OPT_LEVEL "$ENV{ASCEND_OPT_LEVEL}" CACHE STRING "Opt level")
@@ -25,7 +25,8 @@ message(STATUS "ASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH}")
 message(STATUS "ASCEND_SOC_VERSION=${ASCEND_SOC_VERSION}")
 
 # ── Ascend C kernel build system ────────────────────────────────────────────
-set(ASCENDC_KERNEL_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/local_ascendc_cmake")
+# Use CANN's built-in ascendc cmake modules (CANN 9.0.0 structure)
+set(ASCENDC_KERNEL_CMAKE_DIR "${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/tikcpp/ascendc_kernel_cmake")
 set(CMAKE_MODULE_PATH "${ASCENDC_KERNEL_CMAKE_DIR}" ${CMAKE_MODULE_PATH})
 
 # SOC_VERSION is required by host_config.cmake
@@ -45,11 +46,19 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/common
   ${ASCEND_CANN_PACKAGE_PATH}/include
   ${ASCEND_CANN_PACKAGE_PATH}/include/aclnn
+  ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/asc/include
+  ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/asc/include/adv_api
+  ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/asc/include/basic_api
+  ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/include
 )
 
 link_directories(
   ${ASCEND_CANN_PACKAGE_PATH}/lib64
+  ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/lib64
   ${ASCEND_CANN_PACKAGE_PATH}/runtime/lib64
+  /usr/local/Ascend/driver/lib64
+  /usr/local/Ascend/driver/lib64/common
+  /usr/local/Ascend/driver/lib64/driver
 )
 
 # ── Build Ascend C kernel libraries ─────────────────────────────────────────
@@ -93,7 +102,16 @@ function(add_ubench name source kernel_lib)
     ASCEND_SOC_VERSION="${ASCEND_SOC_VERSION}"
     ASCEND_OPT_LEVEL="${ASCEND_OPT_LEVEL}"
   )
-  target_link_libraries(${name} PRIVATE ${kernel_lib} ascendcl pthread dl)
+  # CANN 9.0.0 has complex circular dependencies between its shared libraries.
+  # --allow-shlib-undefined lets the runtime resolve them at load time.
+  target_link_libraries(${name} PRIVATE ${kernel_lib})
+  target_link_libraries(${name} PRIVATE
+    -Wl,--allow-shlib-undefined
+    -Wl,--start-group
+    ascendcl runtime tiling_api register platform error_manager profapi
+    ge_common ge_common_base gert unified_dlog ascend_dump mmpa c_sec
+    -Wl,--end-group
+    pthread dl)
   set_target_properties(${name} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
   )

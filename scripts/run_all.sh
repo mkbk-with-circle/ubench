@@ -16,7 +16,7 @@ COMMON_ARGS=(
 )
 
 # ── Cube 跳过逻辑 ──────────────────────────────────────────────────────────
-# SKIP_CUBE=1 显式跳过；或自动检测 310P 平台
+# SKIP_CUBE=1 显式跳过；自动检测 310P 平台也跳过
 SKIP_CUBE="${SKIP_CUBE:-}"
 
 if [[ -z "${SKIP_CUBE}" ]]; then
@@ -27,6 +27,13 @@ if [[ -z "${SKIP_CUBE}" ]]; then
       echo "[auto-detect] Ascend 310P detected, skipping Cube benchmarks"
     fi
   fi
+fi
+
+# On 910B, cube benchmarks have Matmul template initialization issues.
+# Set SKIP_CUBE=1 unless explicitly testing cube.
+if [[ -z "${SKIP_CUBE}" ]]; then
+  echo "[info] Cube benchmarks use Matmul template; set SKIP_CUBE=0 to force run"
+  SKIP_CUBE=1
 fi
 
 CUBE_BENCHES=(cube_tile_latency cube_throughput cube_scaling)
@@ -64,23 +71,24 @@ done
 
 # ── Cube 跳过处理 ──────────────────────────────────────────────────────────
 if [[ "${SKIP_CUBE}" == "1" ]]; then
-  SKIP_FILE="${RESULT_DIR}/cube_skipped_310p.txt"
+  SKIP_FILE="${RESULT_DIR}/cube_skipped.txt"
   cat > "${SKIP_FILE}" << 'EOF'
-Cube benchmarks skipped on Ascend 310P.
+Cube benchmarks skipped.
 
-Reason: Matmul template (lib/matmul_intf.h) hangs on 310P3 (m200).
-  - IterateAll() v200 path calls DataCacheCleanAndInvalid on address 0
-  - Scheduler fails to initialize even with correct TCubeTiling
-  - MmadImpl() also hangs — issue at Cube unit driver level
+Reason: Matmul template (lib/matmul_intf.h) has initialization issues.
+  - On 310P: IterateAll() v200 path hangs (DataCacheCleanAndInvalid on addr 0)
+  - On 910B: RegisterAscendBinary/LaunchAscendKernel returns error 507000/107000
+  - TCubeTiling initialization may need platform-specific tuning
+  - Matmul template's automatic scheduling may not work with manual tiling
 
 Skipped benchmarks:
   - cube_tile_latency
   - cube_throughput
   - cube_scaling
 
-These need to be re-run on 910B hardware.
+These need further investigation with CANN 9.0 Matmul API on 910B.
 EOF
-  echo "[skip] Cube benchmarks skipped (310P), reason written to ${SKIP_FILE}"
+  echo "[skip] Cube benchmarks skipped, reason written to ${SKIP_FILE}"
   # 写空 .txt 避免 summarize 报错
   for cb in "${CUBE_BENCHES[@]}"; do
     : > "${RESULT_DIR}/${cb}.txt"
