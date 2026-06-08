@@ -3,121 +3,115 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ascend 310P3 μBench 微架构参数测定报告</title>
+<title>Lab2 μBench — Ascend 910B 微架构参数测定</title>
 <script src="chart.umd.min.js"></script>
 <style>
-:root{--bg:#0a0e17;--card:#111927;--border:rgba(255,255,255,0.06);--text:#c8d6e5;--dim:#5a6a7a;--cyan:#00d4ff;--green:#00e676;--red:#ff5252;--orange:#ff9100;--yellow:#ffd740;--purple:#b388ff;--teal:#00bfa5}
+:root{
+  --bg:#0b0f18;--card:#121a28;--border:rgba(255,255,255,.07);
+  --text:#d0dce8;--dim:#6b7c8f;--cyan:#00d4ff;--green:#00e676;
+  --red:#ff5252;--orange:#ff9100;--yellow:#ffd740;--purple:#b388ff;
+  --mte:#ff6b6b;--vec:#00e676;--scl:#ffd740;--cub:#b388ff;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.hdr{background:linear-gradient(135deg,#0d1b2a,#1b2838);border-bottom:1px solid rgba(0,212,255,.15);padding:36px 0;text-align:center}
-.hdr h1{font-size:2.2rem;font-weight:700;background:linear-gradient(90deg,var(--cyan),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hdr .sub{color:var(--dim);font-size:.9rem;margin-top:6px}
-.ctr{max-width:1400px;margin:0 auto;padding:28px 20px}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.hdr{background:linear-gradient(135deg,#0d1b2a,#162436);border-bottom:1px solid rgba(0,212,255,.12);padding:28px 20px;text-align:center}
+.hdr h1{font-size:1.75rem;font-weight:700;background:linear-gradient(90deg,var(--cyan),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr .sub{color:var(--dim);font-size:.85rem;margin-top:4px}
+.ctr{max-width:1280px;margin:0 auto;padding:20px 16px 40px}
 
-/* metric cards */
-.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:28px}
-.mc{background:linear-gradient(135deg,#111927,#162033);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;cursor:default}
-.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
-.mc.mte::before{background:linear-gradient(90deg,var(--red),var(--orange))}
-.mc.vec::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
-.mc.scl::before{background:linear-gradient(90deg,var(--yellow),var(--orange))}
-.mc.cub::before{background:linear-gradient(90deg,var(--purple),#7c4dff)}
-.mc .lb{font-size:.75rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
-.mc .vl{font-size:1.9rem;font-weight:700;margin:3px 0}
-.mc .un{font-size:.8rem;color:var(--dim)}
-.mc.mte .vl{color:var(--red)}.mc.vec .vl{color:var(--green)}.mc.scl .vl{color:var(--yellow)}.mc.cub .vl{color:var(--purple)}
-.mc.warn{border-color:rgba(255,215,64,.25)}
-.mc .warn-tag{display:inline-block;background:rgba(255,215,64,.12);color:var(--yellow);font-size:.7rem;padding:2px 8px;border-radius:10px;margin-top:4px}
+/* 覆盖率条 */
+.cov{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:18px}
+.cov h2{font-size:.95rem;margin-bottom:10px}
+.cov-bar{display:flex;height:22px;border-radius:6px;overflow:hidden;background:rgba(0,0,0,.3)}
+.cov-seg{transition:width .3s}
+.cov-seg.m{background:var(--green)}.cov-seg.p{background:var(--yellow)}.cov-seg.s{background:var(--purple)}.cov-seg.x{background:rgba(255,255,255,.08)}
+.cov-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:.78rem;color:var(--dim)}
+.cov-legend span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.cov-legend .m::before{background:var(--green)}.cov-legend .p::before{background:var(--yellow)}
+.cov-legend .s::before{background:var(--purple)}.cov-legend .x::before{background:rgba(255,255,255,.15)}
 
-/* sections */
-.sec{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:24px;overflow:hidden}
-.sh{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sh .ic{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem}
-.sh .ic.mte{background:rgba(255,82,82,.15)}.sh .ic.vec{background:rgba(0,230,118,.15)}.sh .ic.scl{background:rgba(255,215,64,.15)}.sh .ic.cub{background:rgba(179,136,255,.15)}
-.sh h2{font-size:1.15rem;font-weight:600}
-.sh .bd{margin-left:auto;padding:3px 10px;border-radius:16px;font-size:.72rem;font-weight:600}
-.bd-ok{background:rgba(0,230,118,.15);color:var(--green)}.bd-warn{background:rgba(255,215,64,.15);color:var(--yellow)}.bd-skip{background:rgba(179,136,255,.15);color:var(--purple)}
-.sb{padding:22px}
+/* KPI */
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.kpi .k{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.kpi .n{font-size:1.6rem;font-weight:700;color:var(--cyan)}
+.kpi .l{font-size:.72rem;color:var(--dim);margin-top:2px}
 
-/* chart grid — 固定高度，防止 Chart.js 把页面撑到数千像素 */
-.cg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.cg-4{grid-template-columns:repeat(2,1fr)}
-@media(max-width:900px){.cg,.cg-4{grid-template-columns:1fr}}
-.cb{background:rgba(0,0,0,.2);border-radius:8px;padding:12px 14px}
-.cb h3{font-size:.82rem;color:var(--dim);margin-bottom:8px;font-weight:500}
-.chart-wrap{position:relative;height:168px;width:100%}
-.chart-wrap.sm{height:120px}
+/* 区块 */
+.sec{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.sh{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.sh h2{font-size:1rem;font-weight:600}
+.sh .bd{margin-left:auto;font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:600}
+.bd-ok{background:rgba(0,230,118,.15);color:var(--green)}
+.bd-warn{background:rgba(255,215,64,.15);color:var(--yellow)}
+.bd-skip{background:rgba(179,136,255,.15);color:var(--purple)}
+.sb{padding:14px 16px}
+
+/* Lab2 参数表 */
+.dt{width:100%;border-collapse:collapse;font-size:.82rem}
+.dt th{text-align:left;padding:8px 10px;color:var(--dim);font-weight:500;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
+.dt td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:top}
+.dt tr:hover{background:rgba(255,255,255,.02)}
+.dt .id{font-family:monospace;font-weight:700;width:36px}
+.dt .mo{font-family:'SF Mono',monospace;font-size:.8rem}
+.st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600}
+.st-measured{background:rgba(0,230,118,.15);color:var(--green)}
+.st-partial{background:rgba(255,215,64,.15);color:var(--yellow)}
+.st-skipped{background:rgba(179,136,255,.15);color:var(--purple)}
+.st-missing{background:rgba(255,255,255,.06);color:var(--dim)}
+.cat-mte{color:var(--mte)}.cat-Vector{color:var(--vec)}.cat-Scalar{color:var(--scl)}.cat-Cube{color:var(--cub)}
+.r2g{color:var(--green)}.r2w{color:var(--yellow)}.r2b{color:var(--red)}
+
+/* 图表 */
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:800px){.cg{grid-template-columns:1fr}}
+.cb{background:rgba(0,0,0,.22);border-radius:8px;padding:10px 12px}
+.cb h3{font-size:.78rem;color:var(--dim);margin-bottom:6px}
+.chart-wrap{position:relative;height:200px;width:100%}
+.chart-wrap.sm{height:110px}
 .chart-wrap canvas{display:block;max-height:100%!important}
 
-/* 拟合验证：紧凑卡片网格 */
-.bench-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.bench-card{background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
-.bench-card h4{font-size:.78rem;color:var(--text);margin-bottom:2px;font-weight:600}
-.bench-card .meta{font-size:.72rem;color:var(--dim);margin-bottom:6px;line-height:1.4}
-.bench-card.warn{border-color:rgba(255,215,64,.2)}
+.bench-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.bench-card{background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.bench-card h4{font-size:.75rem;margin-bottom:2px}
+.bench-card .meta{font-size:.68rem;color:var(--dim);margin-bottom:4px}
 
-/* 可折叠区块 */
-details.coll{margin-bottom:14px}
-details.coll summary{cursor:pointer;list-style:none;padding:14px 18px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-weight:600;font-size:.92rem}
+details.coll{margin-bottom:12px}
+details.coll summary{cursor:pointer;list-style:none;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:.88rem;font-weight:600}
 details.coll summary::-webkit-details-marker{display:none}
 details.coll summary::before{content:'▸ ';color:var(--cyan)}
 details.coll[open] summary::before{content:'▾ '}
-details.coll .coll-body{padding:14px 0 4px}
+details.coll .coll-body{padding:10px 0 4px}
 
-/* tables */
-.dt{width:100%;border-collapse:collapse;margin-top:14px;font-size:.88rem}
-.dt th{text-align:left;padding:9px 12px;color:var(--dim);font-weight:500;font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
-.dt td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
-.dt tr:hover{background:rgba(255,255,255,.02)}
-.dt .mo{font-family:'SF Mono','Fira Code',monospace;font-size:.82rem}
-.r2g{color:var(--green)}.r2w{color:var(--yellow)}.r2b{color:var(--red)}
-
-/* analysis */
-.ab{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.1);border-radius:8px;padding:18px;margin-top:18px}
-.ab h3{color:var(--cyan);font-size:.95rem;margin-bottom:10px}
-.ab p{color:#8899aa;line-height:1.7;font-size:.88rem}
-.ab code{background:rgba(0,212,255,.1);padding:1px 5px;border-radius:3px;font-size:.82rem;color:var(--cyan)}
-.ab.warn-box{border-color:rgba(255,215,64,.2);background:rgba(255,215,64,.03)}
-.ab.warn-box h3{color:var(--yellow)}
-.ab.skip-box{border-color:rgba(179,136,255,.2);background:rgba(179,136,255,.03)}
-.ab.skip-box h3{color:var(--purple)}
-
-.ft{text-align:center;padding:36px 0;color:#2a3a4a;font-size:.82rem;border-top:1px solid rgba(255,255,255,.04);margin-top:36px}
+.ab{font-size:.82rem;color:var(--dim);padding:12px;background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.08);border-radius:8px;margin-top:12px}
+.ft{text-align:center;padding:24px;color:#3a4a5a;font-size:.78rem}
 </style>
 </head>
 <body>
-
 <div class="hdr">
-  <h1>🔬 Ascend 310P3 微架构参数测定</h1>
-  <p class="sub">DaVinci AI Core μBench · CANN 8.2.RC1 · 2026-06-07</p>
+  <h1>Lab2 · Ascend 910B 微架构参数测定</h1>
+  <p class="sub" id="hdr-sub">μBench 可视化报告</p>
 </div>
-
 <div class="ctr" id="app"></div>
+<div class="ft">并行与分布式计算导论 · Lab2 μbench · 离线报告</div>
 
-<div class="ft">
-  <p>Ascend C μBench · DaVinci AI Core 微架构参数测定 · Ascend 310P3 × 4 NPU</p>
-  <p style="margin-top:3px">CANN 8.2.RC1 · g++ 10.3.1 · bisheng (Ascend C compiler)</p>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!-- EMBEDDED_DATA: 由 build_data.py --embed 生成，也可手动编辑              -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <script id="EMBEDDED_DATA" type="application/json">
 {
   "meta": {
-    "platform": "Ascend 310P3",
-    "cann_version": "8.2.RC1",
-    "date": "2026-06-07",
+    "platform": "Ascend 910B",
+    "chip": "Ascend910_9362",
+    "cann_version": "9.0.0",
+    "date": "2026-06-08",
+    "freq_ghz": 1.5,
     "run_params": {
       "device": 0,
-      "warmup": 3,
-      "iters": 10,
+      "warmup": 5,
+      "iters": 20,
       "blocks": 4,
       "repeats_sweep": [
-        500,
         1000,
-        2500,
-        5000
+        2000,
+        5000,
+        10000
       ],
       "size_bytes": 65536
     },
@@ -125,21 +119,18 @@ details.coll .coll-body{padding:14px 0 4px}
       "mte_copy_bw": {
         "bytes_per_repeat_per_block": 2048,
         "blocks": 4,
-        "label": "GM↔UB 带宽",
-        "tooltip": "每 repeat: 4 blocks × 1024B×2 (GM→UB→GM) = 8192 B",
-        "lab_mapping": "M1≈ GM↔UB 带宽探针，非纯 L2→L1"
+        "label": "GM↔UB 拷贝带宽",
+        "tooltip": "每 repeat: 4×1024B×2 (GM→UB→GM) = 8192B"
       },
       "mte_startup_latency": {
         "copy_bytes": 32,
-        "label": "32B 拷贝延迟",
-        "tooltip": "每 repeat: 完整 32B DataCopy GM→UB→GM 往返",
-        "lab_mapping": "M8≈ DataCopy 启动+往返，非纯 DMA 启动开销"
+        "label": "32B DataCopy 往返",
+        "tooltip": "完整 32B GM→UB→GM，含 barrier"
       },
       "mte_granularity": {
         "copy_bytes": 32,
-        "label": "DataCopy 粒度",
-        "tooltip": "mode=0 时 32B 最小拷贝粒度",
-        "lab_mapping": "非 Lab2 M7 容量曲线；仅测最小粒度延迟"
+        "label": "最小搬运粒度",
+        "tooltip": "mode=0 → 32B DataCopy"
       },
       "vector_throughput": {
         "lanes": 4,
@@ -147,405 +138,679 @@ details.coll .coll-body{padding:14px 0 4px}
         "blocks": 4,
         "flops_per_elem": 1,
         "label": "FP32 向量吞吐",
-        "tooltip": "每 repeat: 4 blocks × 4 lanes × 256 FP32 Add = 4096 ops",
-        "lab_mapping": "V3≈ 向量 Add 吞吐（带 DataCopy/PipeBarrier，未满占）"
+        "tooltip": "4 blocks×4 lanes×256 FP32 Add / repeat"
       },
       "vector_add_latency": {
-        "label": "FP32 Add RAW 延迟",
-        "tooltip": "依赖链: Add + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-        "lab_mapping": "V1≈ 向量算术延迟"
+        "label": "FP32 Add RAW",
+        "tooltip": "Add + PipeBarrier"
       },
       "vector_mul_latency": {
-        "label": "FP32 Mul RAW 延迟",
-        "tooltip": "依赖链: Mul + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-        "lab_mapping": "V2≈ 向量算术延迟"
+        "label": "FP32 Mul RAW",
+        "tooltip": "Mul + PipeBarrier"
       },
       "vector_pipeline_depth": {
-        "label": "向量管线深度",
-        "tooltip": "依赖 Add + 独立 gap ops，测管线隐藏能力",
-        "lab_mapping": "V4≈ 管线深度探针"
+        "label": "流水线深度探针",
+        "tooltip": "依赖 Add + gap ops"
       },
       "scalar_arith_latency": {
-        "label": "标量算术延迟",
-        "tooltip": "LCG: x = x*1664525 + 1013904223，R²≈0.93 低可信度",
-        "lab_mapping": "S1≈ 标量延迟（实验性，不作为正式 KPI）",
-        "unreliable": true,
-        "unreliable_reason": "R²=0.932 < 0.95；baseline 与 target 成本接近，adjusted 有负值"
+        "label": "标量算术链",
+        "tooltip": "16 次链式乘加 RAW 依赖",
+        "ops_per_repeat": 16
       },
       "scalar_branch_overhead": {
-        "label": "分支开销",
-        "tooltip": "条件分支 vs 无分支 baseline",
-        "lab_mapping": "S2≈ 分支探针（非 S3 访存延迟）"
+        "label": "分支开销探针",
+        "tooltip": "条件分支 vs 无分支"
       }
     },
-    "disclaimer": "本结果基于 Ascend 310P3 (m200) 实测。Cube 基准因 Matmul 模板兼容性问题挂起，已跳过。本结果不能与 Lab2 910B 助教标定值直接对比；Lab 参数映射为近似（M1 实为 GM↔UB 带宽探针等）。scalar_arith_latency R²<0.95 标记为不可靠/实验性。"
+    "coverage": {
+      "lab2_total": 21,
+      "measured": 4,
+      "partial": 4,
+      "skipped": 3,
+      "missing": 10,
+      "benchmarks_ok": 9,
+      "benchmarks_total": 12
+    },
+    "disclaimer": "Ascend 910B (CANN 9.0) 实测。9/12 μbench 通过；Cube 三项因 AIC 注册失败跳过。部分 Lab2 参数为近似映射（M1/M8/M7 等）。未测项需在报告中说明计划。"
   },
+  "lab2_params": [
+    {
+      "id": "S1",
+      "cat": "Scalar",
+      "name": "标量算术指令延迟",
+      "unit": "cycles",
+      "bench": "scalar_arith_latency",
+      "kind": "scalar_chain_cycles",
+      "status": "measured",
+      "value": 0.15,
+      "display": "0.15 cycles/op (16 链/repeat)",
+      "r2": 0.995549,
+      "bench_status": "ok"
+    },
+    {
+      "id": "S2",
+      "cat": "Scalar",
+      "name": "标量单元吞吐率",
+      "unit": "ops/cycle",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "S3",
+      "cat": "Scalar",
+      "name": "标量访存延迟",
+      "unit": "cycles",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "V1",
+      "cat": "Vector",
+      "name": "FP32 向量加法延迟",
+      "unit": "cycles",
+      "bench": "vector_add_latency",
+      "kind": "latency_cycles",
+      "status": "measured",
+      "value": 27.31,
+      "display": "27.31 cycles (18.2 ns)",
+      "r2": 0.999971,
+      "bench_status": "ok"
+    },
+    {
+      "id": "V2",
+      "cat": "Vector",
+      "name": "FP32 向量乘法延迟",
+      "unit": "cycles",
+      "bench": "vector_mul_latency",
+      "kind": "latency_cycles",
+      "status": "measured",
+      "value": 28.17,
+      "display": "28.17 cycles (18.8 ns)",
+      "r2": 0.999982,
+      "bench_status": "ok"
+    },
+    {
+      "id": "V3",
+      "cat": "Vector",
+      "name": "向量单元吞吐率",
+      "unit": "ops/cycle",
+      "bench": "vector_throughput",
+      "kind": "vec_throughput",
+      "status": "measured",
+      "value": 0.147,
+      "display": "0.147 vec-inst/cycle (56.3 GFLOPS)",
+      "r2": 0.999998,
+      "bench_status": "ok"
+    },
+    {
+      "id": "V4",
+      "cat": "Vector",
+      "name": "向量流水线深度",
+      "unit": "条",
+      "bench": "vector_pipeline_depth",
+      "kind": "pipeline_probe",
+      "status": "partial",
+      "value": 26.26,
+      "display": "探针 26.26 cycles（≈V1，gap 被隐藏）",
+      "r2": 0.999986,
+      "bench_status": "ok"
+    },
+    {
+      "id": "V5",
+      "cat": "Vector",
+      "name": "向量寄存器访问延迟",
+      "unit": "cycles",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "C1",
+      "cat": "Cube",
+      "name": "矩阵乘延迟（单 tile）",
+      "unit": "cycles",
+      "bench": "cube_tile_latency",
+      "kind": "cube_skipped",
+      "status": "skipped",
+      "value": null,
+      "display": "N/A",
+      "r2": null,
+      "bench_status": null,
+      "note": "AIC 二进制注册失败 (CANN 9.0)"
+    },
+    {
+      "id": "C2",
+      "cat": "Cube",
+      "name": "矩阵乘吞吐率",
+      "unit": "TFLOPS",
+      "bench": "cube_throughput",
+      "kind": "cube_skipped",
+      "status": "skipped",
+      "value": null,
+      "display": "N/A",
+      "r2": null,
+      "bench_status": null,
+      "note": "AIC 二进制注册失败 (CANN 9.0)"
+    },
+    {
+      "id": "C3",
+      "cat": "Cube",
+      "name": "矩阵乘流水线深度",
+      "unit": "条",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "C4",
+      "cat": "Cube",
+      "name": "L0A/L0B/L0C 访问延迟",
+      "unit": "cycles",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "C5",
+      "cat": "Cube",
+      "name": "矩阵规模延迟缩放",
+      "unit": "—",
+      "bench": "cube_scaling",
+      "kind": "cube_skipped",
+      "status": "skipped",
+      "value": null,
+      "display": "N/A",
+      "r2": null,
+      "bench_status": null,
+      "note": "AIC 二进制注册失败 (CANN 9.0)"
+    },
+    {
+      "id": "M1",
+      "cat": "MTE",
+      "name": "L1 Buffer 读取带宽",
+      "unit": "GB/s",
+      "bench": "mte_copy_bw",
+      "kind": "mte_bw",
+      "note": "探针为 GM↔UB 往返，近似 M1",
+      "status": "partial",
+      "value": 58.2,
+      "display": "58.2 GB/s",
+      "r2": 1.0,
+      "bench_status": "ok"
+    },
+    {
+      "id": "M2",
+      "cat": "MTE",
+      "name": "L1 Buffer 写入带宽",
+      "unit": "GB/s",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "M3",
+      "cat": "MTE",
+      "name": "L0A 带宽",
+      "unit": "GB/s",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "M4",
+      "cat": "MTE",
+      "name": "L0B 带宽",
+      "unit": "GB/s",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "M5",
+      "cat": "MTE",
+      "name": "L0C 带宽",
+      "unit": "GB/s",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "M6",
+      "cat": "MTE",
+      "name": "DDR/HBM 访存延迟",
+      "unit": "cycles",
+      "bench": null,
+      "kind": "missing",
+      "status": "missing",
+      "value": null,
+      "display": "—",
+      "r2": null,
+      "bench_status": null
+    },
+    {
+      "id": "M7",
+      "cat": "MTE",
+      "name": "各级 Buffer 容量",
+      "unit": "KB/MB",
+      "bench": "mte_granularity",
+      "kind": "granularity_partial",
+      "note": "仅测 32B 最小粒度，非容量曲线",
+      "status": "partial",
+      "value": 132.33,
+      "display": "32B 延迟 132 ns（非容量曲线）",
+      "r2": 1.0,
+      "bench_status": "ok"
+    },
+    {
+      "id": "M8",
+      "cat": "MTE",
+      "name": "数据搬运启动开销",
+      "unit": "cycles",
+      "bench": "mte_startup_latency",
+      "kind": "startup_cycles",
+      "note": "含 32B 完整往返，非纯 DMA 启动",
+      "status": "partial",
+      "value": 256.86,
+      "display": "256.86 cycles (171 ns)",
+      "r2": 1.0,
+      "bench_status": "ok"
+    }
+  ],
   "benchmarks": [
     {
       "name": "mte_copy_bw",
       "status": "ok",
-      "label": "GM↔UB 带宽",
-      "tooltip": "每 repeat: 4 blocks × 1024B×2 (GM→UB→GM) = 8192 B",
-      "lab_mapping": "M1≈ GM↔UB 带宽探针，非纯 L2→L1",
+      "label": "GM↔UB 拷贝带宽",
+      "tooltip": "每 repeat: 4×1024B×2 (GM→UB→GM) = 8192B",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.123615,
-      "intercept_us": -4.02332,
-      "r2": 0.999988,
-      "raw_slope_us": 0.134956,
-      "raw_r2": 0.999996,
+      "slope_us": 0.140806,
+      "intercept_us": -0.8969,
+      "r2": 1.0,
+      "raw_slope_us": 0.143868,
+      "raw_r2": 1.0,
       "derived": {
-        "bandwidth_gbs": 66.3,
-        "primary_value": "66.3",
-        "primary_unit": "GB/s",
-        "primary_label": "聚合带宽"
+        "slope_us": 0.140806,
+        "bandwidth_gbs": 58.2,
+        "primary_value": "58.2",
+        "primary_unit": "GB/s"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 78.6415,
-          "baseline_us": 21.3971,
-          "adjusted_us": 57.2444
-        },
-        {
           "repeat": 1000,
-          "total_us": 146.377,
-          "baseline_us": 25.6882,
-          "adjusted_us": 120.689
+          "total_us": 145.988,
+          "baseline_us": 5.73301,
+          "adjusted_us": 140.254
         },
         {
-          "repeat": 2500,
-          "total_us": 347.684,
-          "baseline_us": 43.4552,
-          "adjusted_us": 304.229
+          "repeat": 2000,
+          "total_us": 288.945,
+          "baseline_us": 8.43151,
+          "adjusted_us": 280.514
         },
         {
           "repeat": 5000,
-          "total_us": 686.139,
-          "baseline_us": 71.8625,
-          "adjusted_us": 614.277
+          "total_us": 721.087,
+          "baseline_us": 18.2585,
+          "adjusted_us": 702.829
+        },
+        {
+          "repeat": 10000,
+          "total_us": 1440.42,
+          "baseline_us": 33.1075,
+          "adjusted_us": 1407.32
         }
       ]
     },
     {
       "name": "mte_granularity",
       "status": "ok",
-      "label": "DataCopy 粒度",
-      "tooltip": "mode=0 时 32B 最小拷贝粒度",
-      "lab_mapping": "非 Lab2 M7 容量曲线；仅测最小粒度延迟",
+      "label": "最小搬运粒度",
+      "tooltip": "mode=0 → 32B DataCopy",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.145376,
-      "intercept_us": -13.6912,
-      "r2": 0.99919,
-      "raw_slope_us": 0.144141,
-      "raw_r2": 0.998868,
+      "slope_us": 0.132327,
+      "intercept_us": -3.4622,
+      "r2": 1.0,
+      "raw_slope_us": 0.132367,
+      "raw_r2": 1.0,
       "derived": {
-        "latency_ns": 145.4,
-        "primary_value": "145.4",
-        "primary_unit": "ns",
-        "primary_label": "最小粒度延迟"
+        "slope_us": 0.132327,
+        "latency_ns": 132.33,
+        "cycles": 198.49,
+        "primary_value": "198.5",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 86.8615,
-          "baseline_us": 25.4432,
-          "adjusted_us": 61.4183
-        },
-        {
           "repeat": 1000,
-          "total_us": 153.142,
-          "baseline_us": 16.4221,
-          "adjusted_us": 136.72
+          "total_us": 134.692,
+          "baseline_us": 5.86801,
+          "adjusted_us": 128.824
         },
         {
-          "repeat": 2500,
-          "total_us": 354.051,
-          "baseline_us": 16.7191,
-          "adjusted_us": 337.332
+          "repeat": 2000,
+          "total_us": 266.886,
+          "baseline_us": 5.78149,
+          "adjusted_us": 261.105
         },
         {
           "repeat": 5000,
-          "total_us": 734.78,
-          "baseline_us": 16.6341,
-          "adjusted_us": 718.146
+          "total_us": 664.299,
+          "baseline_us": 5.9095,
+          "adjusted_us": 658.39
+        },
+        {
+          "repeat": 10000,
+          "total_us": 1325.91,
+          "baseline_us": 6.18051,
+          "adjusted_us": 1319.73
         }
       ]
     },
     {
       "name": "mte_startup_latency",
       "status": "ok",
-      "label": "32B 拷贝延迟",
-      "tooltip": "每 repeat: 完整 32B DataCopy GM→UB→GM 往返",
-      "lab_mapping": "M8≈ DataCopy 启动+往返，非纯 DMA 启动开销",
+      "label": "32B DataCopy 往返",
+      "tooltip": "完整 32B GM→UB→GM，含 barrier",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.27464,
-      "intercept_us": -8.55963,
-      "r2": 0.999973,
-      "raw_slope_us": 0.28455,
-      "raw_r2": 0.999986,
+      "slope_us": 0.171242,
+      "intercept_us": -0.565445,
+      "r2": 1.0,
+      "raw_slope_us": 0.173623,
+      "raw_r2": 0.999999,
       "derived": {
-        "latency_ns": 274.6,
-        "primary_value": "274.6",
-        "primary_unit": "ns",
-        "primary_label": "32B 拷贝延迟"
+        "slope_us": 0.171242,
+        "latency_ns": 171.24,
+        "cycles": 256.86,
+        "primary_value": "256.9",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 156.507,
-          "baseline_us": 31.1472,
-          "adjusted_us": 125.36
-        },
-        {
           "repeat": 1000,
-          "total_us": 295.143,
-          "baseline_us": 25.5572,
-          "adjusted_us": 269.586
+          "total_us": 176.829,
+          "baseline_us": 5.84099,
+          "adjusted_us": 170.988
         },
         {
-          "repeat": 2500,
-          "total_us": 720.943,
-          "baseline_us": 42.3913,
-          "adjusted_us": 678.551
+          "repeat": 2000,
+          "total_us": 349.147,
+          "baseline_us": 7.72201,
+          "adjusted_us": 341.425
         },
         {
           "repeat": 5000,
-          "total_us": 1435.75,
-          "baseline_us": 71.7324,
-          "adjusted_us": 1364.02
+          "total_us": 870.783,
+          "baseline_us": 14.913,
+          "adjusted_us": 855.87
+        },
+        {
+          "repeat": 10000,
+          "total_us": 1738.89,
+          "baseline_us": 27.083,
+          "adjusted_us": 1711.81
         }
       ]
     },
     {
       "name": "scalar_arith_latency",
       "status": "ok",
-      "label": "标量算术延迟",
-      "tooltip": "LCG: x = x*1664525 + 1013904223，R²≈0.93 低可信度",
-      "lab_mapping": "S1≈ 标量延迟（实验性，不作为正式 KPI）",
-      "unreliable": true,
-      "unreliable_reason": "R²=0.932 < 0.95；baseline 与 target 成本接近，adjusted 有负值",
-      "slope_us": 0.00114042,
-      "intercept_us": -1.29811,
-      "r2": 0.932142,
-      "raw_slope_us": 0.0054847,
-      "raw_r2": 0.995646,
+      "label": "标量算术链",
+      "tooltip": "16 次链式乘加 RAW 依赖",
+      "unreliable": false,
+      "slope_us": 0.00157812,
+      "intercept_us": -1.8489,
+      "r2": 0.995549,
+      "raw_slope_us": 0.0015857,
+      "raw_r2": 0.993642,
       "derived": {
-        "latency_ns": 1.14,
-        "primary_value": "1.14",
-        "primary_unit": "ns",
-        "primary_label": "LCG 步进延迟"
+        "slope_us": 0.00157812,
+        "cycles_per_op": 0.15,
+        "cycles_per_repeat": 2.37,
+        "primary_value": "0.15",
+        "primary_unit": "cycles/op"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 25.6862,
-          "baseline_us": 26.2671,
-          "adjusted_us": -0.580896
-        },
-        {
           "repeat": 1000,
-          "total_us": 27.0142,
-          "baseline_us": 26.7642,
-          "adjusted_us": 0.25
+          "total_us": 5.73251,
+          "baseline_us": 5.567,
+          "adjusted_us": 0.165503
         },
         {
-          "repeat": 2500,
-          "total_us": 36.8652,
-          "baseline_us": 36.2292,
-          "adjusted_us": 0.635999
+          "repeat": 2000,
+          "total_us": 6.34401,
+          "baseline_us": 5.20551,
+          "adjusted_us": 1.1385
         },
         {
           "repeat": 5000,
-          "total_us": 49.7054,
-          "baseline_us": 44.9392,
-          "adjusted_us": 4.7662
+          "total_us": 11.0025,
+          "baseline_us": 5.476,
+          "adjusted_us": 5.5265
+        },
+        {
+          "repeat": 10000,
+          "total_us": 19.6585,
+          "baseline_us": 5.4785,
+          "adjusted_us": 14.18
         }
       ]
     },
     {
       "name": "scalar_branch_overhead",
       "status": "ok",
-      "label": "分支开销",
-      "tooltip": "条件分支 vs 无分支 baseline",
-      "lab_mapping": "S2≈ 分支探针（非 S3 访存延迟）",
+      "label": "分支开销探针",
+      "tooltip": "条件分支 vs 无分支",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.0106776,
-      "intercept_us": -1.92332,
-      "r2": 0.999246,
-      "raw_slope_us": 0.0105653,
-      "raw_r2": 0.998657,
+      "slope_us": 0.00291677,
+      "intercept_us": -2.8962,
+      "r2": 0.998608,
+      "raw_slope_us": 0.00297156,
+      "raw_r2": 0.998731,
       "derived": {
-        "latency_ns": 10.7,
-        "primary_value": "10.7",
-        "primary_unit": "ns",
-        "primary_label": "分支开销"
+        "slope_us": 0.00291677,
+        "latency_ns": 2.92,
+        "cycles": 4.38,
+        "primary_value": "4.4",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 21.2211,
-          "baseline_us": 17.3051,
-          "adjusted_us": 3.916
-        },
-        {
           "repeat": 1000,
-          "total_us": 25.6661,
-          "baseline_us": 16.9651,
-          "adjusted_us": 8.701
+          "total_us": 6.0605,
+          "baseline_us": 5.515,
+          "adjusted_us": 0.545496
         },
         {
-          "repeat": 2500,
-          "total_us": 40.6023,
-          "baseline_us": 16.6471,
-          "adjusted_us": 23.9552
+          "repeat": 2000,
+          "total_us": 8.04449,
+          "baseline_us": 5.64451,
+          "adjusted_us": 2.39999
         },
         {
           "repeat": 5000,
-          "total_us": 68.5434,
-          "baseline_us": 16.7101,
-          "adjusted_us": 51.8333
+          "total_us": 17.222,
+          "baseline_us": 5.61949,
+          "adjusted_us": 11.6025
+        },
+        {
+          "repeat": 10000,
+          "total_us": 32.4215,
+          "baseline_us": 6.0525,
+          "adjusted_us": 26.369
         }
       ]
     },
     {
       "name": "vector_add_latency",
       "status": "ok",
-      "label": "FP32 Add RAW 延迟",
-      "tooltip": "依赖链: Add + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-      "lab_mapping": "V1≈ 向量算术延迟",
+      "label": "FP32 Add RAW",
+      "tooltip": "Add + PipeBarrier",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.0223987,
-      "intercept_us": -2.41058,
-      "r2": 0.999834,
-      "raw_slope_us": 0.0335403,
-      "raw_r2": 0.999681,
+      "slope_us": 0.0182094,
+      "intercept_us": 0.373229,
+      "r2": 0.999971,
+      "raw_slope_us": 0.0205551,
+      "raw_r2": 0.999991,
       "derived": {
-        "latency_ns": 22.4,
-        "primary_value": "22.4",
-        "primary_unit": "ns",
-        "primary_label": "FP32 Add RAW 延迟"
+        "slope_us": 0.0182094,
+        "latency_ns": 18.21,
+        "cycles": 27.31,
+        "primary_value": "27.3",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 31.4822,
-          "baseline_us": 23.1642,
-          "adjusted_us": 8.31799
-        },
-        {
           "repeat": 1000,
-          "total_us": 46.0343,
-          "baseline_us": 25.2591,
-          "adjusted_us": 20.7752
+          "total_us": 24.3315,
+          "baseline_us": 6.2105,
+          "adjusted_us": 18.121
         },
         {
-          "repeat": 2500,
-          "total_us": 95.9896,
-          "baseline_us": 42.8153,
-          "adjusted_us": 53.1743
+          "repeat": 2000,
+          "total_us": 44.2825,
+          "baseline_us": 7.19601,
+          "adjusted_us": 37.0865
         },
         {
           "repeat": 5000,
-          "total_us": 181.639,
-          "baseline_us": 71.9605,
-          "adjusted_us": 109.679
+          "total_us": 106.264,
+          "baseline_us": 14.4835,
+          "adjusted_us": 91.7805
+        },
+        {
+          "repeat": 10000,
+          "total_us": 209.079,
+          "baseline_us": 26.804,
+          "adjusted_us": 182.275
         }
       ]
     },
     {
       "name": "vector_mul_latency",
       "status": "ok",
-      "label": "FP32 Mul RAW 延迟",
-      "tooltip": "依赖链: Mul + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-      "lab_mapping": "V2≈ 向量算术延迟",
+      "label": "FP32 Mul RAW",
+      "tooltip": "Mul + PipeBarrier",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.0236493,
-      "intercept_us": -3.0948,
-      "r2": 0.999048,
-      "raw_slope_us": 0.0324505,
-      "raw_r2": 0.999047,
+      "slope_us": 0.01878,
+      "intercept_us": 0.435624,
+      "r2": 0.999982,
+      "raw_slope_us": 0.0211535,
+      "raw_r2": 0.99997,
       "derived": {
-        "latency_ns": 23.6,
-        "primary_value": "23.6",
-        "primary_unit": "ns",
-        "primary_label": "FP32 Mul RAW 延迟"
+        "slope_us": 0.01878,
+        "latency_ns": 18.78,
+        "cycles": 28.17,
+        "primary_value": "28.2",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 37.4543,
-          "baseline_us": 28.0462,
-          "adjusted_us": 9.40809
-        },
-        {
           "repeat": 1000,
-          "total_us": 49.1553,
-          "baseline_us": 30.3782,
-          "adjusted_us": 18.7771
+          "total_us": 25.0455,
+          "baseline_us": 5.45751,
+          "adjusted_us": 19.588
         },
         {
-          "repeat": 2500,
-          "total_us": 98.6896,
-          "baseline_us": 41.0382,
-          "adjusted_us": 57.6514
+          "repeat": 2000,
+          "total_us": 45.1515,
+          "baseline_us": 7.5755,
+          "adjusted_us": 37.576
         },
         {
           "repeat": 5000,
-          "total_us": 181.758,
-          "baseline_us": 67.1304,
-          "adjusted_us": 114.628
+          "total_us": 108.83,
+          "baseline_us": 14.494,
+          "adjusted_us": 94.3365
+        },
+        {
+          "repeat": 10000,
+          "total_us": 215.026,
+          "baseline_us": 26.7445,
+          "adjusted_us": 188.282
         }
       ]
     },
     {
       "name": "vector_pipeline_depth",
       "status": "ok",
-      "label": "向量管线深度",
-      "tooltip": "依赖 Add + 独立 gap ops，测管线隐藏能力",
-      "lab_mapping": "V4≈ 管线深度探针",
+      "label": "流水线深度探针",
+      "tooltip": "依赖 Add + gap ops",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.0228295,
-      "intercept_us": -3.45364,
-      "r2": 0.999825,
-      "raw_slope_us": 0.0338087,
-      "raw_r2": 0.999906,
+      "slope_us": 0.0175077,
+      "intercept_us": 1.00838,
+      "r2": 0.999986,
+      "raw_slope_us": 0.0204738,
+      "raw_r2": 0.999981,
       "derived": {
-        "latency_ns": 22.8,
-        "primary_value": "22.8",
-        "primary_unit": "ns",
-        "primary_label": "向量管线深度"
+        "slope_us": 0.0175077,
+        "latency_ns": 17.51,
+        "cycles": 26.26,
+        "primary_value": "26.3",
+        "primary_unit": "cycles"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 29.9732,
-          "baseline_us": 22.6981,
-          "adjusted_us": 7.2751
-        },
-        {
           "repeat": 1000,
-          "total_us": 46.0673,
-          "baseline_us": 25.8922,
-          "adjusted_us": 20.1751
+          "total_us": 24.729,
+          "baseline_us": 6.2295,
+          "adjusted_us": 18.4995
         },
         {
-          "repeat": 2500,
-          "total_us": 96.1056,
-          "baseline_us": 42.5292,
-          "adjusted_us": 53.5764
+          "repeat": 2000,
+          "total_us": 44.8165,
+          "baseline_us": 8.54449,
+          "adjusted_us": 36.272
         },
         {
           "repeat": 5000,
-          "total_us": 181.879,
-          "baseline_us": 71.2544,
-          "adjusted_us": 110.625
+          "total_us": 105.814,
+          "baseline_us": 17.6345,
+          "adjusted_us": 88.1795
+        },
+        {
+          "repeat": 10000,
+          "total_us": 208.892,
+          "baseline_us": 32.6705,
+          "adjusted_us": 176.221
         }
       ]
     },
@@ -553,70 +818,62 @@ details.coll .coll-body{padding:14px 0 4px}
       "name": "vector_throughput",
       "status": "ok",
       "label": "FP32 向量吞吐",
-      "tooltip": "每 repeat: 4 blocks × 4 lanes × 256 FP32 Add = 4096 ops",
-      "lab_mapping": "V3≈ 向量 Add 吞吐（带 DataCopy/PipeBarrier，未满占）",
+      "tooltip": "4 blocks×4 lanes×256 FP32 Add / repeat",
       "unreliable": false,
-      "unreliable_reason": "",
-      "slope_us": 0.114229,
-      "intercept_us": -3.18562,
-      "r2": 0.999999,
-      "raw_slope_us": 0.125253,
-      "raw_r2": 0.99993,
+      "slope_us": 0.0727343,
+      "intercept_us": -0.70251,
+      "r2": 0.999998,
+      "raw_slope_us": 0.07509,
+      "raw_r2": 0.999999,
       "derived": {
-        "gflops": 35.9,
-        "ops_per_cycle": 0.14,
-        "total_ops_per_repeat": 4096,
-        "primary_value": "35.9",
-        "primary_unit": "GFLOPS",
-        "primary_label": "FP32 吞吐"
+        "slope_us": 0.0727343,
+        "gflops": 56.3,
+        "ops_per_cycle": 0.147,
+        "total_ops": 4096,
+        "primary_value": "0.147",
+        "primary_unit": "ops/cycle"
       },
       "sweep": [
         {
-          "repeat": 500,
-          "total_us": 78.6625,
-          "baseline_us": 24.4491,
-          "adjusted_us": 54.2134
-        },
-        {
           "repeat": 1000,
-          "total_us": 136.636,
-          "baseline_us": 25.7742,
-          "adjusted_us": 110.862
+          "total_us": 77.7465,
+          "baseline_us": 6.1855,
+          "adjusted_us": 71.561
         },
         {
-          "repeat": 2500,
-          "total_us": 325.225,
-          "baseline_us": 43.0613,
-          "adjusted_us": 282.164
+          "repeat": 2000,
+          "total_us": 152.127,
+          "baseline_us": 6.912,
+          "adjusted_us": 145.215
         },
         {
           "repeat": 5000,
-          "total_us": 640.543,
-          "baseline_us": 72.4664,
-          "adjusted_us": 568.077
+          "total_us": 377.579,
+          "baseline_us": 14.48,
+          "adjusted_us": 363.098
+        },
+        {
+          "repeat": 10000,
+          "total_us": 753.282,
+          "baseline_us": 26.7485,
+          "adjusted_us": 726.534
         }
       ]
     },
     {
       "name": "cube_tile_latency",
       "status": "skipped",
-      "label": "cube tile latency",
-      "tooltip": "310P Matmul 模板挂起，已跳过",
-      "lab_mapping": "Cube N/A — 待 910B 验证"
-    },
-    {
-      "name": "cube_throughput",
-      "status": "skipped",
-      "label": "cube throughput",
-      "tooltip": "310P Matmul 模板挂起，已跳过",
-      "lab_mapping": "Cube N/A — 待 910B 验证"
+      "label": "cube tile latency"
     },
     {
       "name": "cube_scaling",
       "status": "skipped",
-      "label": "cube scaling",
-      "tooltip": "310P Matmul 模板挂起，已跳过",
-      "lab_mapping": "Cube N/A — 待 910B 验证"
+      "label": "cube scaling"
+    },
+    {
+      "name": "cube_throughput",
+      "status": "skipped",
+      "label": "cube throughput"
     }
   ]
 }
@@ -624,337 +881,228 @@ details.coll .coll-body{padding:14px 0 4px}
 
 <script>
 "use strict";
-
-/* ── 读取 EMBEDDED_DATA ──────────────────────────────────────────────── */
 const DATA = JSON.parse(document.getElementById('EMBEDDED_DATA').textContent);
-const META = DATA.meta;
-const KC   = META.kernel_constants;
-const BENCH = DATA.benchmarks;
-
+const META = DATA.meta || {};
+const LAB2 = DATA.lab2_params || [];
+const BENCH = DATA.benchmarks || [];
+const ok = BENCH.filter(b => b.status === 'ok');
 const byName = Object.fromEntries(BENCH.map(b => [b.name, b]));
-const ok     = BENCH.filter(b => b.status === 'ok');
+const COV = META.coverage || {};
 
-/* ── deriveMetric: 从 EMBEDDED_DATA.derived 读取，不再重新算 ────────── */
-function dv(b, key, fallback) {
-  return (b.derived && b.derived[key] !== undefined) ? b.derived[key] : fallback;
-}
-function primary(b) {
-  if (b.status !== 'ok') return { v: '—', u: '', lb: '' };
-  return { v: dv(b, primary_v_key(b), '—'), u: dv(b, 'primary_unit', 'μs/op'), lb: dv(b, 'primary_label', '') };
-}
-function primary_v_key(b) {
-  if (b.derived && b.derived.bandwidth_gbs !== undefined) return 'primary_value';
-  if (b.derived && b.derived.gflops !== undefined) return 'primary_value';
-  if (b.derived && b.derived.latency_ns !== undefined) return 'primary_value';
-  return 'primary_value';
-}
+const CAT_COLOR = { MTE:'#ff6b6b', Vector:'#00e676', Scalar:'#ffd740', Cube:'#b388ff' };
+const BENCH_COLOR = {
+  mte_copy_bw:'#ff5252', mte_startup_latency:'#ff9100', mte_granularity:'#ff6d00',
+  vector_add_latency:'#00e676', vector_mul_latency:'#00d4ff', vector_throughput:'#00bfa5',
+  vector_pipeline_depth:'#64ffda', scalar_arith_latency:'#ffd740', scalar_branch_overhead:'#ffab40'
+};
 
-/* ── 辅助 ──────────────────────────────────────────────────────────────── */
-function r2cls(v) { return v >= 0.99 ? 'r2g' : v >= 0.95 ? 'r2w' : 'r2b'; }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
+function r2cls(v){ return v>=0.99?'r2g':v>=0.95?'r2w':'r2b'; }
+function stCls(s){ return 'st st-'+s; }
 
-/* ── 渲染概览卡片 ─────────────────────────────────────────────────────── */
-function renderMetrics() {
-  let h = '<div class="mg">';
-
-  // MTE copy BW
-  const mc = byName['mte_copy_bw'];
-  h += `<div class="mc mte" title="${esc(KC.mte_copy_bw.tooltip)}">
-    <div class="lb">MTE 拷贝带宽</div>
-    <div class="vl">${dv(mc,'primary_value','—')}</div>
-    <div class="un">${dv(mc,'primary_unit','GB/s')} · ${esc(KC.mte_copy_bw.lab_mapping)}</div>
+function renderCoverage(){
+  const t = COV.lab2_total || 21;
+  const m = COV.measured||0, p = COV.partial||0, s = COV.skipped||0, x = COV.missing||0;
+  const pct = v => (v/t*100).toFixed(1)+'%';
+  return `<div class="cov">
+    <h2>Lab2 参数覆盖率（共 ${t} 项：S1–S3 · V1–V5 · C1–C5 · M1–M8）</h2>
+    <div class="cov-bar">
+      <div class="cov-seg m" style="width:${pct(m)}" title="已测定 ${m}"></div>
+      <div class="cov-seg p" style="width:${pct(p)}" title="近似 ${p}"></div>
+      <div class="cov-seg s" style="width:${pct(s)}" title="跳过 ${s}"></div>
+      <div class="cov-seg x" style="width:${pct(x)}" title="未实现 ${x}"></div>
+    </div>
+    <div class="cov-legend">
+      <span class="m">已测定 ${m}</span>
+      <span class="p">近似/探针 ${p}</span>
+      <span class="s">跳过 ${s}</span>
+      <span class="x">未实现 ${x}</span>
+      <span style="margin-left:auto">μbench: ${COV.benchmarks_ok||0}/${COV.benchmarks_total||12} 通过</span>
+    </div>
   </div>`;
-
-  // MTE startup
-  const ms = byName['mte_startup_latency'];
-  h += `<div class="mc mte" title="${esc(KC.mte_startup_latency.tooltip)}">
-    <div class="lb">${esc(KC.mte_startup_latency.label)}</div>
-    <div class="vl">${dv(ms,'primary_value','—')}</div>
-    <div class="un">${dv(ms,'primary_unit','ns')} · ${esc(KC.mte_startup_latency.lab_mapping)}</div>
-  </div>`;
-
-  // V1 Add latency
-  const v1 = byName['vector_add_latency'];
-  h += `<div class="mc vec" title="${esc(KC.vector_add_latency.tooltip)}">
-    <div class="lb">${esc(KC.vector_add_latency.label)}</div>
-    <div class="vl">${dv(v1,'primary_value','—')}</div>
-    <div class="un">${dv(v1,'primary_unit','ns')} · ${esc(KC.vector_add_latency.lab_mapping)}</div>
-  </div>`;
-
-  // V3 throughput
-  const v3 = byName['vector_throughput'];
-  h += `<div class="mc vec" title="${esc(KC.vector_throughput.tooltip)}">
-    <div class="lb">${esc(KC.vector_throughput.label)}</div>
-    <div class="vl">${dv(v3,'primary_value','—')}</div>
-    <div class="un">${dv(v3,'primary_unit','GFLOPS')} · ${dv(v3,'ops_per_cycle','—')} ops/cycle @1GHz</div>
-  </div>`;
-
-  // scalar arith — 带警告
-  const s1 = byName['scalar_arith_latency'];
-  h += `<div class="mc scl warn" title="${esc(KC.scalar_arith_latency.unreliable_reason)}">
-    <div class="lb">${esc(KC.scalar_arith_latency.label)}</div>
-    <div class="vl">${dv(s1,'primary_value','—')}</div>
-    <div class="un">${dv(s1,'primary_unit','ns')} · R²=${s1.r2}</div>
-    <div class="warn-tag">⚠ 低可信度: ${esc(KC.scalar_arith_latency.unreliable_reason)}</div>
-  </div>`;
-
-  // Cube
-  h += `<div class="mc cub" title="310P Matmul 模板挂起，已跳过">
-    <div class="lb">Cube 矩阵乘法</div>
-    <div class="vl" style="font-size:1.3rem">310P 不支持</div>
-    <div class="un">已跳过 · 待 910B 验证</div>
-  </div>`;
-
-  h += '</div>';
-  return h;
 }
 
-/* ── 可折叠：测试配置 ──────────────────────────────────────────────────── */
-function renderConfig() {
-  const rp = META.run_params;
-  return `<details class="coll"><summary>⚙️ 测试配置 & 推导公式</summary><div class="coll-body"><div class="cg">
-    <div class="cb" style="background:transparent"><h3>运行参数</h3><table class="dt" style="margin-top:0">
-      <tr><td>device</td><td class="mo">${rp.device}</td></tr>
-      <tr><td>warmup / iters</td><td class="mo">${rp.warmup} / ${rp.iters}</td></tr>
-      <tr><td>blocks</td><td class="mo">${rp.blocks}</td></tr>
-      <tr><td>repeats sweep</td><td class="mo">${rp.repeats_sweep.join(', ')}</td></tr>
-      <tr><td>size_bytes</td><td class="mo">${rp.size_bytes} (${rp.size_bytes/1024} KB)</td></tr>
-    </table></div>
-    <div class="cb" style="background:transparent"><h3>推导公式</h3><table class="dt" style="margin-top:0">
-      <tr><td>MTE 带宽</td><td class="mo">${KC.mte_copy_bw.blocks}×1024×2 / slope_us → GB/s</td></tr>
-      <tr><td>Vector GFLOPS</td><td class="mo">${KC.vector_throughput.blocks}×${KC.vector_throughput.lanes}×${KC.vector_throughput.elems} / slope_us</td></tr>
-      <tr><td>拟合图 Y 轴</td><td class="mo">adjusted_us / repeat（μs/op），应接近水平线 = slope</td></tr>
-    </table></div>
-  </div></div></details>`;
+function renderKPI(){
+  const m1 = LAB2.find(p=>p.id==='M1');
+  const v1 = LAB2.find(p=>p.id==='V1');
+  const v3 = LAB2.find(p=>p.id==='V3');
+  const s1 = LAB2.find(p=>p.id==='S1');
+  return `<div class="kpi">
+    <div class="k"><div class="n">${COV.measured||0}</div><div class="l">Lab2 已测定</div></div>
+    <div class="k"><div class="n" style="color:var(--mte)">${m1?m1.display.split(' ')[0]:'—'}</div><div class="l">M1 带宽</div></div>
+    <div class="k"><div class="n" style="color:var(--vec)">${v1?v1.display.split(' ')[0]:'—'}</div><div class="l">V1 Add 延迟</div></div>
+    <div class="k"><div class="n" style="color:var(--vec)">${v3?v3.display.split(' ')[0]:'—'}</div><div class="l">V3 吞吐</div></div>
+    <div class="k"><div class="n" style="color:var(--scl)">${s1?s1.display.split(' ')[0]:'—'}</div><div class="l">S1 标量延迟</div></div>
+    <div class="k"><div class="n" style="color:var(--purple)">${COV.skipped||0}</div><div class="l">Cube 跳过</div></div>
+  </div>`;
 }
 
-/* ── 汇总表（一行一 benchmark）──────────────────────────────────────── */
-function renderMasterTable() {
-  let h = `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.12)">📋</div><h2>测定结果汇总</h2><span class="bd bd-ok">${ok.length} 项通过</span></div><div class="sb">`;
-  h += '<table class="dt"><thead><tr><th>类别</th><th>基准</th><th>派生指标</th><th>斜率 (μs/op)</th><th>R²</th><th>Lab 映射</th></tr></thead><tbody>';
-  for (const b of ok) {
-    const cat = b.name.startsWith('mte_') ? 'MTE' : b.name.startsWith('vector_') ? 'Vector' : 'Scalar';
-    const kc = KC[b.name] || {};
-    const derived = `${b.derived.primary_value} ${b.derived.primary_unit}`;
-    h += `<tr${b.unreliable ? ' style="opacity:.85"' : ''}>
-      <td>${cat}</td>
-      <td>${esc(b.label)}${b.unreliable ? ' ⚠' : ''}</td>
-      <td class="mo">${derived}</td>
-      <td class="mo">${b.slope_us}</td>
-      <td class="${r2cls(b.r2)}">${b.r2.toFixed(5)}</td>
-      <td style="font-size:.8rem;color:var(--dim)">${esc(kc.lab_mapping || '—')}</td>
+function renderLab2Table(){
+  let h = `<div class="sec"><div class="sh"><h2>📋 Lab2 必测参数（21 项）</h2><span class="bd bd-ok">${COV.measured||0} 测定 · ${COV.partial||0} 近似</span></div><div class="sb">
+    <table class="dt"><thead><tr>
+      <th>ID</th><th>类别</th><th>参数名称</th><th>单位</th><th>测定值</th><th>状态</th><th>R²</th><th>说明</th>
+    </tr></thead><tbody>`;
+  for (const p of LAB2){
+    const stLabel = {measured:'已测定',partial:'近似',skipped:'跳过',missing:'未实现'}[p.status]||p.status;
+    h += `<tr>
+      <td class="id">${p.id}</td>
+      <td class="cat-${p.cat}">${p.cat}</td>
+      <td>${esc(p.name)}</td>
+      <td class="mo">${esc(p.unit)}</td>
+      <td class="mo">${esc(p.display)}</td>
+      <td><span class="${stCls(p.status)}">${stLabel}</span></td>
+      <td class="${p.r2!=null?r2cls(p.r2):''}">${p.r2!=null?p.r2.toFixed(4):'—'}</td>
+      <td style="font-size:.75rem;color:var(--dim)">${esc(p.note||'')}</td>
     </tr>`;
   }
   h += '</tbody></table></div></div>';
   return h;
 }
 
-/* ── 拟合验证：μs/op 应平坦（比绝对 time 更易读）──────────────────────── */
-function benchSummaryLine(b) {
-  const d = b.derived;
-  if (b.name === 'mte_copy_bw') return `斜率 ${b.slope_us} μs/op → ${d.primary_value} ${d.primary_unit}`;
-  if (b.name === 'vector_throughput') return `${d.primary_value} ${d.primary_unit} · ${d.ops_per_cycle} vec-inst/cycle`;
-  if (d.latency_ns !== undefined) return `≈ ${d.primary_value} ${d.primary_unit}/op`;
-  return `斜率 ${b.slope_us} μs/op`;
+function renderCategoryCharts(){
+  return `<div class="sec"><div class="sh"><h2>📈 分类对比图</h2></div><div class="sb"><div class="cg">
+    <div class="cb"><h3>延迟类 (cycles) — V1/V2/V4/S1/M8</h3><div class="chart-wrap"><canvas id="ch_lat"></canvas></div></div>
+    <div class="cb"><h3>带宽 & 吞吐 — M1 / V3 GFLOPS</h3><div class="chart-wrap"><canvas id="ch_bw_tp"></canvas></div></div>
+    <div class="cb"><h3>各类别 Lab2 完成度</h3><div class="chart-wrap"><canvas id="ch_cov"></canvas></div></div>
+    <div class="cb"><h3>μbench 拟合 R²</h3><div class="chart-wrap"><canvas id="ch_r2"></canvas></div></div>
+  </div></div></div>`;
 }
 
-function renderFitGrid() {
-  let h = `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,230,118,.12)">📐</div>
-    <h2>线性拟合验证</h2><span class="bd bd-ok">Y = adjusted/repeat (μs/op)</span></div><div class="sb">
-    <p style="font-size:.82rem;color:var(--dim);margin-bottom:12px">
-      纵轴为每次 repeat 的<strong>单位成本</strong>（baseline 校正后），拟合良好时应接近水平虚线（= 调整后斜率）。
-      不再绘制绝对 time(μs)，避免 0~1400 μs 量级把图表撑得过长。
-    </p><div class="bench-grid">`;
-  for (const b of ok) {
-    const kc = KC[b.name] || {};
-    h += `<div class="bench-card${b.unreliable ? ' warn' : ''}">
-      <h4>${esc(b.label)}</h4>
-      <div class="meta">${esc(benchSummaryLine(b))} · R²=${b.r2.toFixed(4)}</div>
-      <div class="chart-wrap sm"><canvas id="chart_${b.name}"></canvas></div>
+function renderFitGrid(){
+  let h = `<div class="sec"><div class="sh"><h2>📐 线性拟合验证</h2><span class="bd bd-ok">Y = adjusted/repeat (μs/op)</span></div><div class="sb">
+    <p style="font-size:.78rem;color:var(--dim);margin-bottom:10px">单位成本应接近水平线（= 调整后斜率）。仅展示已通过 μbench。</p>
+    <div class="bench-grid">`;
+  for (const b of ok){
+    const d = b.derived||{};
+    const line = d.primary_value ? `${d.primary_value} ${d.primary_unit}` : `${b.slope_us} μs/op`;
+    h += `<div class="bench-card">
+      <h4>${esc(b.label)} <span style="color:var(--dim);font-weight:400">(${esc(b.name)})</span></h4>
+      <div class="meta">${esc(line)} · R²=${b.r2.toFixed(4)}</div>
+      <div class="chart-wrap sm"><canvas id="fit_${b.name}"></canvas></div>
     </div>`;
   }
   h += '</div></div></div>';
   return h;
 }
 
-/* ── 原始 sweep 数据（可折叠）────────────────────────────────────────── */
-function renderRawTable() {
-  let h = '<table class="dt"><thead><tr><th>基准</th><th>repeat</th><th>total</th><th>baseline</th><th>adjusted</th><th>μs/op</th></tr></thead><tbody>';
-  for (const b of ok) {
-    for (let i = 0; i < b.sweep.length; i++) {
-      const s = b.sweep[i];
-      const perOp = s.adjusted_us / s.repeat;
-      h += '<tr>';
-      if (i === 0) h += `<td rowspan="${b.sweep.length}">${esc(b.name)}</td>`;
-      h += `<td class="mo">${s.repeat}</td><td class="mo">${s.total_us.toFixed(1)}</td><td class="mo">${s.baseline_us.toFixed(1)}</td>
-        <td class="mo">${s.adjusted_us.toFixed(2)}</td><td class="mo">${perOp.toFixed(4)}</td></tr>`;
-    }
-  }
-  h += '</tbody></table>';
-  return `<details class="coll"><summary>📊 原始 sweep 数据 (μs)</summary><div class="coll-body">${h}</div></details>`;
-}
-
-function renderCube() {
-  return `<details class="coll"><summary>🧮 Cube — 310P 不支持 · 已跳过</summary><div class="coll-body">
-    <div class="ab skip-box"><p>
-      三个 Cube 基准在 310P3 上 <code>Matmul</code> 模板挂起，已跳过。待 910B 验证。未修改 Cube 内核源码。
-    </p></div></details>`;
-}
-
-/* ── 综合对比（横向条形图，按量级分组）────────────────────────────────── */
-function renderOverview() {
-  return `<div class="sec"><div class="sh"><div class="ic" style="background:rgba(0,212,255,.15)">📈</div><h2>派生指标对比</h2></div><div class="sb">
-    <div class="cg cg-4">
-      <div class="cb"><h3>带宽 GB/s</h3><div class="chart-wrap"><canvas id="overview_bw"></canvas></div></div>
-      <div class="cb"><h3>吞吐 GFLOPS</h3><div class="chart-wrap"><canvas id="overview_gflops"></canvas></div></div>
-      <div class="cb"><h3>延迟 ns/op（对数）</h3><div class="chart-wrap"><canvas id="overview_lat"></canvas></div></div>
-      <div class="cb"><h3>拟合 R²</h3><div class="chart-wrap"><canvas id="overview_r2"></canvas></div></div>
-    </div>
-    <div class="ab" style="margin-top:14px"><h3>⚠ 310P 免责声明</h3><p>${esc(META.disclaimer)}</p></div>
-  </div></div>`;
-}
-
-/* ── Chart.js 绘图（固定容器高度 + 合理 Y 轴）────────────────────────── */
-const AX = {
-  x: { ticks: { color: '#5a6a7a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } },
-  y: { ticks: { color: '#5a6a7a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } }
-};
-
-const COLORS = {
-  mte_copy_bw: '#ff5252', mte_startup_latency: '#ff9100', mte_granularity: '#ff6d00',
-  vector_add_latency: '#00e676', vector_mul_latency: '#00d4ff', vector_throughput: '#00bfa5',
-  vector_pipeline_depth: '#64ffda', scalar_arith_latency: '#ffd740', scalar_branch_overhead: '#ff9100'
-};
-
-/** 拟合验证：μs/op = adjusted/repeat，水平线 = slope */
-function drawPerOpFit(cid, b, color) {
-  const el = document.getElementById(cid);
-  if (!el || typeof Chart === 'undefined') return;
-  const sw = b.sweep;
-  const reps = sw.map(s => s.repeat);
-  const perOp = sw.map(s => s.adjusted_us / s.repeat);
-  const slope = b.slope_us;
-  const flat = reps.map(() => slope);
-  const vals = perOp.filter(v => isFinite(v));
-  const pad = (Math.max(...vals, slope) - Math.min(...vals, slope)) * 0.15 || slope * 0.1 || 0.01;
-  const yMin = Math.min(...vals, slope) - pad;
-  const yMax = Math.max(...vals, slope) + pad;
-
-  new Chart(el.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: reps,
-      datasets: [
-        { label: 'μs/op', data: perOp, borderColor: color, backgroundColor: color + '44',
-          pointRadius: 4, borderWidth: 2, tension: 0 },
-        { label: `slope ${slope}`, data: flat, borderColor: '#8899aa',
-          borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, tension: 0 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ...AX.x, title: { display: true, text: 'repeat', color: '#5a6a7a', font: { size: 10 } } },
-        y: { ...AX.y, min: yMin, max: yMax, title: { display: true, text: 'μs/op', color: '#5a6a7a', font: { size: 10 } } }
-      }
-    }
-  });
-}
-
-/** 横向条形图（标签长时更易读） */
-function drawHBar(cid, labels, vals, colors, unit, logScale) {
-  const el = document.getElementById(cid);
-  if (!el || typeof Chart === 'undefined' || !labels.length) return;
-  new Chart(el.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{ data: vals, backgroundColor: colors.map(c => c + '99'), borderColor: colors, borderWidth: 1.5 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (c) => `${c.parsed.x} ${unit}` } }
-      },
-      scales: {
-        x: { ...AX.x, type: logScale ? 'logarithmic' : 'linear', title: { display: true, text: unit, color: '#5a6a7a', font: { size: 10 } } },
-        y: { ...AX.y, ticks: { ...AX.y.ticks, autoSkip: false, font: { size: 9 } } }
-      }
-    }
-  });
-}
-
-function drawCharts() {
-  if (typeof Chart === 'undefined') return;
-  const reliable = ok.filter(b => !b.unreliable);
-
-  for (const b of ok) {
-    drawPerOpFit(`chart_${b.name}`, b, COLORS[b.name] || '#888');
-  }
-
-  const bwItems = reliable.filter(b => b.derived.bandwidth_gbs);
-  drawHBar('overview_bw', bwItems.map(b => b.label), bwItems.map(b => b.derived.bandwidth_gbs),
-    bwItems.map(b => COLORS[b.name]), 'GB/s', false);
-
-  const tpItems = reliable.filter(b => b.derived.gflops);
-  drawHBar('overview_gflops', tpItems.map(b => b.label), tpItems.map(b => b.derived.gflops),
-    tpItems.map(b => COLORS[b.name]), 'GFLOPS', false);
-
-  const latItems = reliable.filter(b => b.derived.latency_ns);
-  drawHBar('overview_lat', latItems.map(b => b.label), latItems.map(b => b.derived.latency_ns),
-    latItems.map(b => COLORS[b.name]), 'ns', true);
-
-  const r2s = ok.map(b => b.r2);
-  const el2 = document.getElementById('overview_r2');
-  if (el2) {
-    new Chart(el2.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: ok.map(b => b.label),
-        datasets: [{
-          data: r2s,
-          backgroundColor: r2s.map(v => v >= 0.99 ? '#00e67688' : v >= 0.95 ? '#ffd74088' : '#ff525288'),
-          borderColor: r2s.map(v => v >= 0.99 ? '#00e676' : v >= 0.95 ? '#ffd740' : '#ff5252'),
-          borderWidth: 1.5
-        }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { min: 0.9, max: 1.0001, ...AX.x, title: { display: true, text: 'R²', color: '#5a6a7a', font: { size: 10 } } },
-          y: { ...AX.y, ticks: { font: { size: 9 }, color: '#5a6a7a' } }
-        }
-      }
+function renderRaw(){
+  let t = '<table class="dt"><thead><tr><th>benchmark</th><th>repeat</th><th>total μs</th><th>baseline μs</th><th>adjusted μs</th><th>μs/op</th></tr></thead><tbody>';
+  for (const b of ok){
+    b.sweep.forEach((s,i)=>{
+      t += '<tr>';
+      if(i===0) t += `<td rowspan="${b.sweep.length}">${esc(b.name)}</td>`;
+      t += `<td class="mo">${s.repeat}</td><td class="mo">${s.total_us.toFixed(1)}</td><td class="mo">${s.baseline_us.toFixed(1)}</td>
+        <td class="mo">${s.adjusted_us.toFixed(2)}</td><td class="mo">${(s.adjusted_us/s.repeat).toFixed(4)}</td></tr>`;
     });
   }
+  t += '</tbody></table>';
+  const rp = META.run_params||{};
+  return `<details class="coll"><summary>⚙️ 运行参数 & 原始 sweep 数据</summary><div class="coll-body">
+    <p class="ab" style="margin-top:0">device=${rp.device} · warmup=${rp.warmup} · iters=${rp.iters} · blocks=${rp.blocks} · repeats=${(rp.repeats_sweep||[]).join(',')} · size=${rp.size_bytes}B · @${META.freq_ghz||1.5}GHz</p>
+    ${t}</div></details>`;
 }
 
-/* ── 主渲染 ────────────────────────────────────────────────────────────── */
-function render() {
-  let html = '';
-  html += renderMetrics();
-  html += renderOverview();
-  html += renderMasterTable();
-  html += renderFitGrid();
-  html += renderRawTable();
-  html += renderConfig();
-  html += renderCube();
+const AX = {
+  x:{ticks:{color:'#6b7c8f',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},
+  y:{ticks:{color:'#6b7c8f',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}}
+};
 
-  document.getElementById('app').innerHTML = html;
-  if (typeof Chart === 'undefined') {
-    const warn = document.createElement('div');
-    warn.className = 'ab warn-box';
-    warn.style.marginBottom = '20px';
-    warn.innerHTML = '<h3>⚠ 图表库未加载</h3><p>请确保 <code>chart.umd.min.js</code> 与本页面位于同一目录，或通过本地 HTTP 服务打开。</p>';
-    document.getElementById('app').prepend(warn);
+function drawPerOp(cid, b, color){
+  const el = document.getElementById(cid);
+  if(!el||typeof Chart==='undefined') return;
+  const reps = b.sweep.map(s=>s.repeat);
+  const perOp = b.sweep.map(s=>s.adjusted_us/s.repeat);
+  const slope = b.slope_us;
+  const flat = reps.map(()=>slope);
+  const vals = perOp.filter(v=>isFinite(v));
+  const pad = (Math.max(...vals,slope)-Math.min(...vals,slope))*0.2 || slope*0.1 || 0.001;
+  new Chart(el.getContext('2d'),{
+    type:'line',
+    data:{labels:reps,datasets:[
+      {data:perOp,borderColor:color,pointRadius:3,borderWidth:2,tension:0},
+      {data:flat,borderColor:'#6b7c8f',borderDash:[4,3],pointRadius:0,borderWidth:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{...AX.x,title:{display:true,text:'repeat',color:'#6b7c8f',font:{size:9}}},
+        y:{...AX.y,min:Math.min(...vals,slope)-pad,max:Math.max(...vals,slope)+pad,
+          title:{display:true,text:'μs/op',color:'#6b7c8f',font:{size:9}}}}}
+  });
+}
+
+function drawHBar(cid, labels, vals, colors, unit, xmin, xmax){
+  const el = document.getElementById(cid);
+  if(!el||typeof Chart==='undefined'||!labels.length) return;
+  const scale = { ...AX.x, title:{display:true,text:unit,color:'#6b7c8f',font:{size:9}} };
+  if(xmin!=null) scale.min = xmin;
+  if(xmax!=null) scale.max = xmax;
+  new Chart(el.getContext('2d'),{
+    type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:colors.map(c=>c+'99'),borderColor:colors,borderWidth:1.5}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:scale,y:{...AX.y,ticks:{font:{size:8},color:'#6b7c8f'}}}}
+  });
+}
+
+function drawCharts(){
+  if(typeof Chart==='undefined') return;
+
+  // 延迟 cycles
+  const latParams = LAB2.filter(p=>['V1','V2','V4','S1','M8'].includes(p.id) && p.value!=null);
+  drawHBar('ch_lat', latParams.map(p=>p.id+' '+p.name.split(' ').slice(0,2).join(' ')),
+    latParams.map(p=>typeof p.value==='number'?p.value:0),
+    latParams.map(p=>CAT_COLOR[p.cat]), 'cycles');
+
+  // 带宽 + GFLOPS
+  const m1 = LAB2.find(p=>p.id==='M1');
+  const v3b = byName['vector_throughput'];
+  const bwLabels=[], bwVals=[], bwColors=[];
+  if(m1&&m1.value){ bwLabels.push('M1 带宽'); bwVals.push(m1.value); bwColors.push(CAT_COLOR.MTE); }
+  if(v3b&&v3b.derived&&v3b.derived.gflops){ bwLabels.push('V3 GFLOPS'); bwVals.push(v3b.derived.gflops); bwColors.push(CAT_COLOR.Vector); }
+  drawHBar('ch_bw_tp', bwLabels, bwVals, bwColors, 'value');
+
+  // 各类别完成度 stacked counts
+  const cats = ['Scalar','Vector','Cube','MTE'];
+  const measured = cats.map(c=>LAB2.filter(p=>p.cat===c&&p.status==='measured').length);
+  const partial = cats.map(c=>LAB2.filter(p=>p.cat===c&&p.status==='partial').length);
+  const skipped = cats.map(c=>LAB2.filter(p=>p.cat===c&&p.status==='skipped').length);
+  const missing = cats.map(c=>LAB2.filter(p=>p.cat===c&&p.status==='missing').length);
+  const elCov = document.getElementById('ch_cov');
+  if(elCov){
+    new Chart(elCov.getContext('2d'),{
+      type:'bar',
+      data:{labels:cats,datasets:[
+        {label:'已测定',data:measured,backgroundColor:'#00e67699'},
+        {label:'近似',data:partial,backgroundColor:'#ffd74099'},
+        {label:'跳过',data:skipped,backgroundColor:'#b388ff99'},
+        {label:'未实现',data:missing,backgroundColor:'#ffffff22'}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#8899aa',font:{size:9}}}},
+        scales:{x:{...AX.x,stacked:true},y:{...AX.y,stacked:true,max:8}}}
+    });
+  }
+
+  drawHBar('ch_r2', ok.map(b=>b.label), ok.map(b=>b.r2),
+    ok.map(b=>b.r2>=0.99?'#00e676':'#ffd740'), 'R²', 0.9, 1.0001);
+
+  for(const b of ok) drawPerOp('fit_'+b.name, b, BENCH_COLOR[b.name]||'#888');
+}
+
+function render(){
+  document.getElementById('hdr-sub').textContent =
+    `${META.platform||'Ascend'} · ${META.cann_version||''} · ${META.date||''} · @${META.freq_ghz||1.5}GHz`;
+
+  document.getElementById('app').innerHTML =
+    renderCoverage() + renderKPI() + renderLab2Table() +
+    renderCategoryCharts() + renderFitGrid() + renderRaw() +
+    `<div class="ab">${esc(META.disclaimer||'')}</div>`;
+
+  if(typeof Chart==='undefined'){
+    document.getElementById('app').insertAdjacentHTML('afterbegin',
+      '<div class="ab" style="border-color:#ffd740">⚠ 未加载 chart.umd.min.js，图表不可用</div>');
     return;
   }
-  try { drawCharts(); } catch (e) { console.error('drawCharts failed:', e); }
+  try{ drawCharts(); }catch(e){ console.error(e); }
 }
-
 render();
 </script>
 </body>

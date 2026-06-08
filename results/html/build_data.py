@@ -1,303 +1,339 @@
 #!/usr/bin/env python3
-"""
-build_data.py — 从 summary.csv 和逐 benchmark CSV 生成 EMBEDDED_DATA JSON，
-可直接输出到 stdout，也可 --embed 写回 index.html。
+"""从 results/*.csv 生成 EMBEDDED_DATA，并写回 index.html。
 
-用法:
-  python3 results/html/build_data.py                  # 打印 JSON
-  python3 results/html/build_data.py --embed           # 写回 index.html
-  python3 results/html/build_data.py --embed --html path/to/index.html
-
-离线打开: index.html 依赖同目录 chart.umd.min.js（Chart.js 4.4.0）
+用法: python3 results/html/build_data.py --embed
 """
-import argparse, csv, json, os, re, sys
+import argparse
+import csv
+import json
+import re
+import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent.parent          # ubench/
-RESULTS_DIR = SCRIPT_DIR.parent              # ubench/results/
+RESULTS_DIR = SCRIPT_DIR.parent
 
-# ── kernel 常量（从 kernel 源码抄录，不运行时解析） ─────────────────────────
+# 910B AI Core 主频（用于 ns/us → cycles 换算）
+FREQ_GHZ = 1.5
+
 KERNEL_CONSTANTS = {
     "mte_copy_bw": {
-        "bytes_per_repeat_per_block": 2048,   # kTileBytes=1024, GM→UB + UB→GM
+        "bytes_per_repeat_per_block": 2048,
         "blocks": 4,
-        "label": "GM↔UB 带宽",
-        "tooltip": "每 repeat: 4 blocks × 1024B×2 (GM→UB→GM) = 8192 B",
-        "lab_mapping": "M1≈ GM↔UB 带宽探针，非纯 L2→L1",
+        "label": "GM↔UB 拷贝带宽",
+        "tooltip": "每 repeat: 4×1024B×2 (GM→UB→GM) = 8192B",
     },
     "mte_startup_latency": {
         "copy_bytes": 32,
-        "label": "32B 拷贝延迟",
-        "tooltip": "每 repeat: 完整 32B DataCopy GM→UB→GM 往返",
-        "lab_mapping": "M8≈ DataCopy 启动+往返，非纯 DMA 启动开销",
+        "label": "32B DataCopy 往返",
+        "tooltip": "完整 32B GM→UB→GM，含 barrier",
     },
     "mte_granularity": {
-        "copy_bytes": 32,  # mode=0 → 32B
-        "label": "DataCopy 粒度",
-        "tooltip": "mode=0 时 32B 最小拷贝粒度",
-        "lab_mapping": "非 Lab2 M7 容量曲线；仅测最小粒度延迟",
+        "copy_bytes": 32,
+        "label": "最小搬运粒度",
+        "tooltip": "mode=0 → 32B DataCopy",
     },
     "vector_throughput": {
-        "lanes": 4,
-        "elems": 256,
-        "blocks": 4,
-        "flops_per_elem": 1,  # 1 FP32 Add per element
+        "lanes": 4, "elems": 256, "blocks": 4, "flops_per_elem": 1,
         "label": "FP32 向量吞吐",
-        "tooltip": "每 repeat: 4 blocks × 4 lanes × 256 FP32 Add = 4096 ops",
-        "lab_mapping": "V3≈ 向量 Add 吞吐（带 DataCopy/PipeBarrier，未满占）",
+        "tooltip": "4 blocks×4 lanes×256 FP32 Add / repeat",
     },
-    "vector_add_latency": {
-        "label": "FP32 Add RAW 延迟",
-        "tooltip": "依赖链: Add + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-        "lab_mapping": "V1≈ 向量算术延迟",
-    },
-    "vector_mul_latency": {
-        "label": "FP32 Mul RAW 延迟",
-        "tooltip": "依赖链: Mul + PipeBarrier<PIPE_V>，测 RAW 冒险停顿",
-        "lab_mapping": "V2≈ 向量算术延迟",
-    },
-    "vector_pipeline_depth": {
-        "label": "向量管线深度",
-        "tooltip": "依赖 Add + 独立 gap ops，测管线隐藏能力",
-        "lab_mapping": "V4≈ 管线深度探针",
-    },
+    "vector_add_latency": {"label": "FP32 Add RAW", "tooltip": "Add + PipeBarrier"},
+    "vector_mul_latency": {"label": "FP32 Mul RAW", "tooltip": "Mul + PipeBarrier"},
+    "vector_pipeline_depth": {"label": "流水线深度探针", "tooltip": "依赖 Add + gap ops"},
     "scalar_arith_latency": {
-        "label": "标量算术延迟",
-        "tooltip": "LCG: x = x*1664525 + 1013904223，R²≈0.93 低可信度",
-        "lab_mapping": "S1≈ 标量延迟（实验性，不作为正式 KPI）",
-        "unreliable": True,
-        "unreliable_reason": "R²=0.932 < 0.95；baseline 与 target 成本接近，adjusted 有负值",
+        "label": "标量算术链",
+        "tooltip": "16 次链式乘加 RAW 依赖",
+        "ops_per_repeat": 16,
     },
-    "scalar_branch_overhead": {
-        "label": "分支开销",
-        "tooltip": "条件分支 vs 无分支 baseline",
-        "lab_mapping": "S2≈ 分支探针（非 S3 访存延迟）",
-    },
+    "scalar_branch_overhead": {"label": "分支开销探针", "tooltip": "条件分支 vs 无分支"},
 }
 
-CUBE_BENCHMARKS = ["cube_tile_latency", "cube_throughput", "cube_scaling"]
+# Lab2 必测 21 项（见 lab2.pdf §4.2）
+LAB2_PARAM_DEFS = [
+    # Scalar
+    {"id": "S1", "cat": "Scalar", "name": "标量算术指令延迟", "unit": "cycles",
+     "bench": "scalar_arith_latency", "kind": "scalar_chain_cycles"},
+    {"id": "S2", "cat": "Scalar", "name": "标量单元吞吐率", "unit": "ops/cycle",
+     "bench": None, "kind": "missing"},
+    {"id": "S3", "cat": "Scalar", "name": "标量访存延迟", "unit": "cycles",
+     "bench": None, "kind": "missing"},
+    # Vector
+    {"id": "V1", "cat": "Vector", "name": "FP32 向量加法延迟", "unit": "cycles",
+     "bench": "vector_add_latency", "kind": "latency_cycles"},
+    {"id": "V2", "cat": "Vector", "name": "FP32 向量乘法延迟", "unit": "cycles",
+     "bench": "vector_mul_latency", "kind": "latency_cycles"},
+    {"id": "V3", "cat": "Vector", "name": "向量单元吞吐率", "unit": "ops/cycle",
+     "bench": "vector_throughput", "kind": "vec_throughput"},
+    {"id": "V4", "cat": "Vector", "name": "向量流水线深度", "unit": "条",
+     "bench": "vector_pipeline_depth", "kind": "pipeline_probe"},
+    {"id": "V5", "cat": "Vector", "name": "向量寄存器访问延迟", "unit": "cycles",
+     "bench": None, "kind": "missing"},
+    # Cube
+    {"id": "C1", "cat": "Cube", "name": "矩阵乘延迟（单 tile）", "unit": "cycles",
+     "bench": "cube_tile_latency", "kind": "cube_skipped"},
+    {"id": "C2", "cat": "Cube", "name": "矩阵乘吞吐率", "unit": "TFLOPS",
+     "bench": "cube_throughput", "kind": "cube_skipped"},
+    {"id": "C3", "cat": "Cube", "name": "矩阵乘流水线深度", "unit": "条",
+     "bench": None, "kind": "missing"},
+    {"id": "C4", "cat": "Cube", "name": "L0A/L0B/L0C 访问延迟", "unit": "cycles",
+     "bench": None, "kind": "missing"},
+    {"id": "C5", "cat": "Cube", "name": "矩阵规模延迟缩放", "unit": "—",
+     "bench": "cube_scaling", "kind": "cube_skipped"},
+    # MTE
+    {"id": "M1", "cat": "MTE", "name": "L1 Buffer 读取带宽", "unit": "GB/s",
+     "bench": "mte_copy_bw", "kind": "mte_bw", "note": "探针为 GM↔UB 往返，近似 M1"},
+    {"id": "M2", "cat": "MTE", "name": "L1 Buffer 写入带宽", "unit": "GB/s",
+     "bench": None, "kind": "missing"},
+    {"id": "M3", "cat": "MTE", "name": "L0A 带宽", "unit": "GB/s",
+     "bench": None, "kind": "missing"},
+    {"id": "M4", "cat": "MTE", "name": "L0B 带宽", "unit": "GB/s",
+     "bench": None, "kind": "missing"},
+    {"id": "M5", "cat": "MTE", "name": "L0C 带宽", "unit": "GB/s",
+     "bench": None, "kind": "missing"},
+    {"id": "M6", "cat": "MTE", "name": "DDR/HBM 访存延迟", "unit": "cycles",
+     "bench": None, "kind": "missing"},
+    {"id": "M7", "cat": "MTE", "name": "各级 Buffer 容量", "unit": "KB/MB",
+     "bench": "mte_granularity", "kind": "granularity_partial",
+     "note": "仅测 32B 最小粒度，非容量曲线"},
+    {"id": "M8", "cat": "MTE", "name": "数据搬运启动开销", "unit": "cycles",
+     "bench": "mte_startup_latency", "kind": "startup_cycles",
+     "note": "含 32B 完整往返，非纯 DMA 启动"},
+]
+
+CUBE_BENCHES = {"cube_tile_latency", "cube_throughput", "cube_scaling"}
 
 
 def read_summary(path: Path) -> dict:
-    """读 summary.csv，返回 {benchmark_name: row_dict}"""
     rows = {}
     if not path.exists():
         return rows
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             rows[row["benchmark"]] = row
     return rows
 
 
 def read_detail_csv(path: Path) -> list:
-    """读单个 benchmark CSV 的 repeat sweep 行"""
     rows = []
     if not path.exists():
         return rows
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             rows.append(row)
     return rows
 
 
-def derive_metric(name: str, slope_us: float, meta: dict) -> dict:
-    """根据 benchmark 名和 kernel 常量推导物理指标"""
+def us_to_cycles(slope_us: float) -> float:
+    return round(slope_us * FREQ_GHZ * 1000, 2)
+
+
+def derive_benchmark(name: str, slope_us: float) -> dict:
     kc = KERNEL_CONSTANTS.get(name, {})
-    result = {}
+    d = {"slope_us": slope_us}
 
     if name == "mte_copy_bw":
-        bprpb = kc.get("bytes_per_repeat_per_block", 2048)
-        blocks = kc.get("blocks", 4)
-        total_bytes = bprpb * blocks  # 8192
-        bw_gbs = total_bytes / (slope_us * 1e-6) / 1e9
-        result["bandwidth_gbs"] = round(bw_gbs, 1)
-        result["primary_value"] = f"{bw_gbs:.1f}"
-        result["primary_unit"] = "GB/s"
-        result["primary_label"] = "聚合带宽"
-
-    elif name == "mte_startup_latency":
-        ns = slope_us * 1000
-        result["latency_ns"] = round(ns, 1)
-        result["primary_value"] = f"{ns:.1f}"
-        result["primary_unit"] = "ns"
-        result["primary_label"] = "32B 拷贝延迟"
-
-    elif name == "mte_granularity":
-        ns = slope_us * 1000
-        result["latency_ns"] = round(ns, 1)
-        result["primary_value"] = f"{ns:.1f}"
-        result["primary_unit"] = "ns"
-        result["primary_label"] = "最小粒度延迟"
-
+        total_b = kc["bytes_per_repeat_per_block"] * kc["blocks"]
+        bw = total_b / (slope_us * 1e-6) / 1e9
+        d.update(bandwidth_gbs=round(bw, 1), primary_value=f"{bw:.1f}", primary_unit="GB/s")
     elif name == "vector_throughput":
-        lanes = kc.get("lanes", 4)
-        elems = kc.get("elems", 256)
-        blocks = kc.get("blocks", 4)
-        flops_per = kc.get("flops_per_elem", 1)
-        total_ops = blocks * lanes * elems * flops_per  # 4096
-        gflops = total_ops / (slope_us * 1e-6) / 1e9
-        ops_per_cycle = (blocks * lanes) / (slope_us * 1000)  # @1GHz
-        result["gflops"] = round(gflops, 1)
-        result["ops_per_cycle"] = round(ops_per_cycle, 3)
-        result["total_ops_per_repeat"] = total_ops
-        result["primary_value"] = f"{gflops:.1f}"
-        result["primary_unit"] = "GFLOPS"
-        result["primary_label"] = "FP32 吞吐"
-
-    elif name in ("vector_add_latency", "vector_mul_latency", "vector_pipeline_depth"):
+        ops = kc["blocks"] * kc["lanes"] * kc["elems"]
+        gflops = ops / (slope_us * 1e-6) / 1e9
+        vec_inst = kc["blocks"] * kc["lanes"]
+        opc = vec_inst / (slope_us * FREQ_GHZ * 1000)
+        d.update(gflops=round(gflops, 1), ops_per_cycle=round(opc, 3),
+                 total_ops=ops, primary_value=f"{opc:.3f}", primary_unit="ops/cycle")
+    elif name in ("vector_add_latency", "vector_mul_latency", "vector_pipeline_depth",
+                  "mte_startup_latency", "mte_granularity", "scalar_branch_overhead"):
         ns = slope_us * 1000
-        result["latency_ns"] = round(ns, 1)
-        result["primary_value"] = f"{ns:.1f}"
-        result["primary_unit"] = "ns"
-        result["primary_label"] = kc.get("label", "延迟")
-
+        cyc = us_to_cycles(slope_us)
+        d.update(latency_ns=round(ns, 2), cycles=cyc,
+                 primary_value=f"{cyc:.1f}", primary_unit="cycles")
     elif name == "scalar_arith_latency":
-        ns = slope_us * 1000
-        result["latency_ns"] = round(ns, 2)
-        result["primary_value"] = f"{ns:.2f}"
-        result["primary_unit"] = "ns"
-        result["primary_label"] = "LCG 步进延迟"
+        ops = kc.get("ops_per_repeat", 16)
+        cyc_per_repeat = us_to_cycles(slope_us)
+        cyc_per_op = round(cyc_per_repeat / ops, 2)
+        d.update(cycles_per_op=cyc_per_op, cycles_per_repeat=cyc_per_repeat,
+                 primary_value=f"{cyc_per_op:.2f}", primary_unit="cycles/op")
+    return d
 
-    elif name == "scalar_branch_overhead":
-        ns = slope_us * 1000
-        result["latency_ns"] = round(ns, 1)
-        result["primary_value"] = f"{ns:.1f}"
-        result["primary_unit"] = "ns"
-        result["primary_label"] = "分支开销"
 
+def resolve_lab2_param(defn: dict, bench_by_name: dict) -> dict:
+    p = {**defn, "status": "missing", "value": None, "display": "—", "r2": None, "bench_status": None}
+
+    if defn["kind"] == "missing":
+        p["status"] = "missing"
+        return p
+
+    if defn["kind"] == "cube_skipped":
+        p["status"] = "skipped"
+        p["display"] = "N/A"
+        p["note"] = p.get("note") or "AIC 二进制注册失败 (CANN 9.0)"
+        return p
+
+    bench_name = defn.get("bench")
+    b = bench_by_name.get(bench_name)
+    if not b or b.get("status") != "ok":
+        p["status"] = "missing"
+        return p
+
+    derived = b["derived"]
+    slope = b["slope_us"]
+    r2 = b["r2"]
+    p["r2"] = r2
+    p["bench_status"] = "ok"
+
+    kind = defn["kind"]
+    if kind == "mte_bw":
+        p["status"] = "partial"
+        p["value"] = derived["bandwidth_gbs"]
+        p["display"] = f"{derived['bandwidth_gbs']} GB/s"
+    elif kind == "startup_cycles":
+        p["status"] = "partial"
+        p["value"] = derived["cycles"]
+        p["display"] = f"{derived['cycles']} cycles ({derived['latency_ns']:.0f} ns)"
+    elif kind == "granularity_partial":
+        p["status"] = "partial"
+        p["value"] = derived["latency_ns"]
+        p["display"] = f"32B 延迟 {derived['latency_ns']:.0f} ns（非容量曲线）"
+    elif kind == "latency_cycles":
+        p["status"] = "measured"
+        p["value"] = derived["cycles"]
+        p["display"] = f"{derived['cycles']} cycles ({derived['latency_ns']:.1f} ns)"
+    elif kind == "vec_throughput":
+        p["status"] = "measured"
+        p["value"] = derived["ops_per_cycle"]
+        p["display"] = f"{derived['ops_per_cycle']} vec-inst/cycle ({derived['gflops']} GFLOPS)"
+    elif kind == "pipeline_probe":
+        p["status"] = "partial"
+        p["value"] = derived["cycles"]
+        p["display"] = f"探针 {derived['cycles']} cycles（≈V1，gap 被隐藏）"
+    elif kind == "scalar_chain_cycles":
+        unreliable = r2 < 0.95
+        p["status"] = "partial" if unreliable else "measured"
+        p["value"] = derived["cycles_per_op"]
+        p["display"] = f"{derived['cycles_per_op']} cycles/op (16 链/repeat)"
     else:
-        result["primary_value"] = f"{slope_us:.4f}"
-        result["primary_unit"] = "μs/op"
-        result["primary_label"] = "斜率"
+        p["status"] = "measured"
+        p["display"] = derived.get("primary_value", "—")
 
-    return result
+    return p
 
 
 def build_embedded_data() -> dict:
-    """构建完整的 EMBEDDED_DATA JSON"""
     summary = read_summary(RESULTS_DIR / "summary.csv")
+
+    # 从 CSV 推断 sweep 与运行参数
+    repeats_sweep = []
+    sample = read_detail_csv(RESULTS_DIR / "mte_copy_bw.csv")
+    if sample:
+        repeats_sweep = sorted({int(r["repeat"]) for r in sample})
+
+    run_params = {
+        "device": 0, "warmup": 5, "iters": 20, "blocks": 4,
+        "repeats_sweep": repeats_sweep or [1000, 2000, 5000, 10000],
+        "size_bytes": 65536,
+    }
+    if summary:
+        row = next(iter(summary.values()))
+        run_params["device"] = int(row.get("device", 0))
+        run_params["blocks"] = int(row.get("blocks", 4))
+        run_params["size_bytes"] = int(row.get("size_bytes", 65536))
 
     benchmarks = []
     for name in sorted(KERNEL_CONSTANTS.keys()):
-        row = summary.get(name)
         kc = KERNEL_CONSTANTS[name]
-
-        if row is None:
-            # cube 或缺失
-            benchmarks.append({
-                "name": name,
-                "status": "skipped" if name in CUBE_BENCHMARKS else "missing",
-                "label": kc.get("label", name),
-                "tooltip": kc.get("tooltip", ""),
-                "lab_mapping": kc.get("lab_mapping", ""),
-            })
+        row = summary.get(name)
+        if not row:
+            benchmarks.append({"name": name, "status": "missing", "label": kc.get("label", name)})
             continue
 
-        slope = float(row.get("adjusted_slope_us", 0))
-        r2 = float(row.get("adjusted_r2", 0))
-        raw_slope = float(row.get("raw_slope_us", 0))
-        raw_r2 = float(row.get("raw_r2", 0))
-
-        derived = derive_metric(name, slope, kc)
-
-        detail_rows = read_detail_csv(RESULTS_DIR / f"{name}.csv")
+        slope = float(row["adjusted_slope_us"])
+        r2 = float(row["adjusted_r2"])
+        derived = derive_benchmark(name, slope)
         sweep = []
-        for dr in detail_rows:
+        for dr in read_detail_csv(RESULTS_DIR / f"{name}.csv"):
             sweep.append({
-                "repeat": int(dr.get("repeat", 0)),
-                "total_us": float(dr.get("total_us", 0)),
-                "baseline_us": float(dr.get("baseline_us", 0)),
-                "adjusted_us": float(dr.get("adjusted_us", 0)),
+                "repeat": int(dr["repeat"]),
+                "total_us": float(dr["total_us"]),
+                "baseline_us": float(dr["baseline_us"]),
+                "adjusted_us": float(dr["adjusted_us"]),
             })
 
         benchmarks.append({
-            "name": name,
-            "status": "ok",
-            "label": kc.get("label", name),
-            "tooltip": kc.get("tooltip", ""),
-            "lab_mapping": kc.get("lab_mapping", ""),
-            "unreliable": kc.get("unreliable", False),
-            "unreliable_reason": kc.get("unreliable_reason", ""),
-            "slope_us": slope,
-            "intercept_us": float(row.get("adjusted_intercept_us", 0)),
-            "r2": r2,
-            "raw_slope_us": raw_slope,
-            "raw_r2": raw_r2,
-            "derived": derived,
-            "sweep": sweep,
+            "name": name, "status": "ok", "label": kc.get("label", name),
+            "tooltip": kc.get("tooltip", ""), "unreliable": r2 < 0.95,
+            "slope_us": slope, "intercept_us": float(row["adjusted_intercept_us"]),
+            "r2": r2, "raw_slope_us": float(row["raw_slope_us"]), "raw_r2": float(row["raw_r2"]),
+            "derived": derived, "sweep": sweep,
         })
 
-    # cube 占位
-    for cname in CUBE_BENCHMARKS:
-        if not any(b["name"] == cname for b in benchmarks):
+    bench_by_name = {b["name"]: b for b in benchmarks}
+
+    lab2_params = [resolve_lab2_param(d, bench_by_name) for d in LAB2_PARAM_DEFS]
+
+    for cname in CUBE_BENCHES:
+        if cname not in bench_by_name:
             benchmarks.append({
-                "name": cname,
-                "status": "skipped",
-                "label": cname.replace("_", " "),
-                "tooltip": "310P Matmul 模板挂起，已跳过",
-                "lab_mapping": "Cube N/A — 待 910B 验证",
+                "name": cname, "status": "skipped", "label": cname.replace("_", " "),
             })
+
+    measured = sum(1 for p in lab2_params if p["status"] == "measured")
+    partial = sum(1 for p in lab2_params if p["status"] == "partial")
+    skipped = sum(1 for p in lab2_params if p["status"] == "skipped")
+    missing = sum(1 for p in lab2_params if p["status"] == "missing")
 
     return {
         "meta": {
-            "platform": "Ascend 310P3",
-            "cann_version": "8.2.RC1",
-            "date": "2026-06-07",
-            "run_params": {
-                "device": 0,
-                "warmup": 3,
-                "iters": 10,
-                "blocks": 4,
-                "repeats_sweep": [500, 1000, 2500, 5000],
-                "size_bytes": 65536,
-            },
+            "platform": "Ascend 910B",
+            "chip": "Ascend910_9362",
+            "cann_version": "9.0.0",
+            "date": "2026-06-08",
+            "freq_ghz": FREQ_GHZ,
+            "run_params": run_params,
             "kernel_constants": KERNEL_CONSTANTS,
+            "coverage": {
+                "lab2_total": 21,
+                "measured": measured,
+                "partial": partial,
+                "skipped": skipped,
+                "missing": missing,
+                "benchmarks_ok": sum(1 for b in benchmarks if b.get("status") == "ok"),
+                "benchmarks_total": 12,
+            },
             "disclaimer": (
-                "本结果基于 Ascend 310P3 (m200) 实测。"
-                "Cube 基准因 Matmul 模板兼容性问题挂起，已跳过。"
-                "本结果不能与 Lab2 910B 助教标定值直接对比；"
-                "Lab 参数映射为近似（M1 实为 GM↔UB 带宽探针等）。"
-                "scalar_arith_latency R²<0.95 标记为不可靠/实验性。"
+                "Ascend 910B (CANN 9.0) 实测。9/12 μbench 通过；Cube 三项因 AIC 注册失败跳过。"
+                "部分 Lab2 参数为近似映射（M1/M8/M7 等）。未测项需在报告中说明计划。"
             ),
         },
+        "lab2_params": lab2_params,
         "benchmarks": benchmarks,
     }
 
 
 def embed_into_html(html_path: Path, data_json: str):
-    """将 EMBEDDED_DATA JSON 写回 index.html 的 <script id="EMBEDDED_DATA"> 块"""
     html = html_path.read_text(encoding="utf-8")
-
     block = f'<script id="EMBEDDED_DATA" type="application/json">\n{data_json}\n</script>'
-
-    if 'id="EMBEDDED_DATA"' in html:
-        html = re.sub(
-            r'<script id="EMBEDDED_DATA"[^>]*>.*?</script>',
-            block, html, flags=re.DOTALL
-        )
-    else:
-        # 插入到 </head> 前
-        html = html.replace('</head>', f'{block}\n</head>')
-
+    html = re.sub(
+        r'<script id="EMBEDDED_DATA"[^>]*>.*?</script>',
+        block, html, count=1, flags=re.DOTALL,
+    )
     html_path.write_text(html, encoding="utf-8")
-    print(f"[OK] EMBEDDED_DATA written to {html_path}", file=sys.stderr)
+    print(f"[OK] embedded → {html_path}", file=sys.stderr)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build EMBEDDED_DATA for ubench HTML report")
-    parser.add_argument("--embed", action="store_true", help="Write JSON back into index.html")
-    parser.add_argument("--html", type=str, default=str(SCRIPT_DIR / "index.html"),
-                        help="Path to index.html (default: results/html/index.html)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--embed", action="store_true")
+    parser.add_argument("--html", default=str(SCRIPT_DIR / "index.html"))
     args = parser.parse_args()
 
     data = build_embedded_data()
-    data_json = json.dumps(data, indent=2, ensure_ascii=False)
-
+    js = json.dumps(data, indent=2, ensure_ascii=False)
     if args.embed:
-        embed_into_html(Path(args.html), data_json)
+        embed_into_html(Path(args.html), js)
     else:
-        print(data_json)
+        print(js)
 
 
 if __name__ == "__main__":
