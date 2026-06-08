@@ -29,11 +29,10 @@ if [[ -z "${SKIP_CUBE}" ]]; then
   fi
 fi
 
-# On 910B, cube benchmarks have Matmul template initialization issues.
-# Set SKIP_CUBE=1 unless explicitly testing cube.
+# On 910B, cube benchmarks use real Matmul API (fixed 2026-06-08).
+# Default to running them. Set SKIP_CUBE=1 to skip.
 if [[ -z "${SKIP_CUBE}" ]]; then
-  echo "[info] Cube benchmarks use Matmul template; set SKIP_CUBE=0 to force run"
-  SKIP_CUBE=1
+  SKIP_CUBE=0
 fi
 
 CUBE_BENCHES=(cube_tile_latency cube_throughput cube_scaling)
@@ -43,12 +42,18 @@ BENCHES=(
   mte_copy_bw
   mte_startup_latency
   mte_granularity
+  mte_write_bw
+  mte_hbm_latency
+  mte_buffer_capacity
   vector_add_latency
   vector_mul_latency
   vector_throughput
   vector_pipeline_depth
+  vector_reg_latency
   scalar_arith_latency
   scalar_branch_overhead
+  scalar_throughput
+  scalar_mem_latency
 )
 
 # 根据 SKIP_CUBE 决定是否加入 Cube

@@ -69,10 +69,14 @@ set(KERNEL_SOURCES
   mte_copy_bw          mte/copy_bw/kernel.cpp
   mte_startup_latency  mte/startup_latency/kernel.cpp
   mte_granularity      mte/granularity/kernel.cpp
+  mte_write_bw         mte/write_bw/kernel.cpp
+  mte_hbm_latency      mte/hbm_latency/kernel.cpp
+  mte_buffer_capacity  mte/buffer_capacity/kernel.cpp
   vector_add_latency   vector/add_latency/kernel.cpp
   vector_mul_latency   vector/mul_latency/kernel.cpp
   vector_throughput    vector/throughput/kernel.cpp
   vector_pipeline_depth vector/pipeline_depth/kernel.cpp
+  vector_reg_latency   vector/reg_latency/kernel.cpp
   cube_matmul          cube/cube_matmul_kernel.cpp
   scalar               scalar/scalar_kernel.cpp
 )
@@ -120,12 +124,18 @@ endfunction()
 add_ubench(mte_copy_bw           mte/copy_bw/main.cpp           mte_copy_bw_kernels)
 add_ubench(mte_startup_latency   mte/startup_latency/main.cpp   mte_startup_latency_kernels)
 add_ubench(mte_granularity       mte/granularity/main.cpp       mte_granularity_kernels)
+add_ubench(mte_write_bw          mte/write_bw/main.cpp          mte_write_bw_kernels)
+add_ubench(mte_hbm_latency       mte/hbm_latency/main.cpp       mte_hbm_latency_kernels)
+add_ubench(mte_buffer_capacity   mte/buffer_capacity/main.cpp   mte_buffer_capacity_kernels)
 add_ubench(vector_add_latency    vector/add_latency/main.cpp    vector_add_latency_kernels)
 add_ubench(vector_mul_latency    vector/mul_latency/main.cpp    vector_mul_latency_kernels)
 add_ubench(vector_throughput     vector/throughput/main.cpp     vector_throughput_kernels)
 add_ubench(vector_pipeline_depth vector/pipeline_depth/main.cpp vector_pipeline_depth_kernels)
+add_ubench(vector_reg_latency    vector/reg_latency/main.cpp    vector_reg_latency_kernels)
 add_ubench(cube_tile_latency     cube/tile_latency/main.cpp     cube_matmul_kernels)
 add_ubench(cube_throughput       cube/throughput/main.cpp       cube_matmul_kernels)
 add_ubench(cube_scaling          cube/scaling/main.cpp          cube_matmul_kernels)
 add_ubench(scalar_arith_latency  scalar/arith_latency/main.cpp  scalar_kernels)
 add_ubench(scalar_branch_overhead scalar/branch_overhead/main.cpp scalar_kernels)
+add_ubench(scalar_throughput     scalar/throughput/main.cpp     scalar_kernels)
+add_ubench(scalar_mem_latency    scalar/mem_latency/main.cpp    scalar_kernels)
